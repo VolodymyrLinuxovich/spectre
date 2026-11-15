@@ -62,6 +62,10 @@ if it is not there. Code: `truth_ranks`, `rr_vec` and `metrics` in `bench/refere
 \end{cases}
 ```
 
+So a spectrum scores 1 when the true molecule is ranked first, 1/2 when it is second, and 0 when it falls
+outside the top 20. Averaging over all $`N`$ spectra gives the two scores we track. MRR@20 rewards every step up
+the list, and hit@$`k`$ only counts whether the true molecule made the top $`k`$.
+
 ```math
 \mathrm{MRR@20} = \frac{1}{N} \sum_{i=1}^{N} \mathrm{RR}_i
 \qquad\qquad
@@ -119,6 +123,9 @@ Both run on seed 0:
 \Delta_{\mathrm{ablate}} &= \mathrm{MRR}^{c}_{\text{spectra zeroed}} - \mathrm{MRR}^{b}_{\text{spectra zeroed}}
 \end{aligned}
 ```
+
+A real gain should mostly disappear under both canaries. If at least half of it survives, the Referee stops
+there and names the cause.
 
 ```math
 \text{LEAK if } \Delta_{\mathrm{shuffle}} \ge \tfrac{1}{2}\,\Delta
