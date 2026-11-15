@@ -70,20 +70,29 @@ section .lead { text-align: center; color: var(--ink-2); max-width: 640px; margi
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; transition: background .3s, border-color .3s; }
 .gate b { font-size: 14.5px; font-weight: 600; }
 .gate span { font-size: 13px; color: var(--ink-3); line-height: 1.35; }
-.gate.pass { border-color: var(--ok); background: var(--ok-bg); }
-.gate.fail { border-color: var(--bad); background: var(--bad-bg); }
+.gate { position: relative; overflow: hidden; }
+.gate.check { border-color: var(--ink-3); border-style: solid; }
+.gate.check::after { content: ""; position: absolute; left: 0; top: 0; height: 3px; width: 100%; background: var(--ink);
+  transform-origin: left; animation: scanbar .5s linear forwards; }
+@keyframes scanbar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.gate.pass { border-color: var(--ok); background: var(--ok-bg); border-style: solid; }
+.gate.fail { border-color: var(--bad); background: var(--bad-bg); border-style: solid; animation: shake .35s; }
+@keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+.claim.hit { animation: nudge .35s; }
+@keyframes nudge { 20%, 60% { translate: -4px 0; } 40%, 80% { translate: 4px 0; } }
 .slot { border-radius: 10px; min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; gap: 6px; color: var(--ink-3); font-size: 13px; }
 .slot.inc { border: 1px solid var(--line); background: var(--surface-2); }
 .slot.inc b { color: var(--ink); font-size: 14.5px; }
 .claim { position: absolute; left: 0; top: 0; width: 150px; background: var(--surface); border: 1px solid var(--line-2);
   border-radius: 10px; padding: 10px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.08); font-size: 13.5px; line-height: 1.35;
-  transition: transform .9s cubic-bezier(.4,.1,.2,1), opacity .5s; will-change: transform, opacity; }
+  transition: transform .45s cubic-bezier(.3,.7,.2,1), opacity .3s; will-change: transform, opacity; }
 .claim .who { color: var(--ink-3); font-size: 12px; }
 .claim .gain { font-weight: 600; }
 .stamp { display: inline-block; margin-top: 6px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
   opacity: 0; transition: opacity .3s; }
-.stamp.show { opacity: 1; }
+.stamp.show { opacity: 1; animation: pop .3s cubic-bezier(.3,1.6,.5,1); }
+@keyframes pop { from { transform: scale(.4); } to { transform: scale(1); } }
 .stamp.bad { background: var(--bad-bg); color: var(--bad); }
 .stamp.ok { background: var(--ok-bg); color: var(--ok); }
 .why { margin-top: 18px; min-height: 48px; text-align: center; color: var(--ink-2); font-size: 15px; }
@@ -187,6 +196,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
 }
 @media (prefers-reduced-motion: reduce) {
   .claim, .reveal { transition: none; }
+  .gate.check::after, .gate.fail, .claim.hit, .stamp.show { animation: none; }
 }
 </style>
 </head>
@@ -344,34 +354,35 @@ async function runClaim(c) {
   place(el, 0);
   await sleep(50); el.style.opacity = "1";
   whyEl.innerHTML = `${c.who} claims <b>${c.text.toLowerCase()}</b> improves the model.`;
-  await sleep(1100);
+  await sleep(500);
   const end = Math.min(c.stop, 5);
   for (let g = 1; g <= end; g++) {
     place(el, g);
-    await sleep(1000);
+    await sleep(450);
+    if (g <= 4) { cols[g].classList.add("check"); await sleep(520); cols[g].classList.remove("check"); }
     if (g === c.stop && g <= 4) {
-      cols[g].classList.add("fail");
+      cols[g].classList.add("fail"); el.classList.add("hit");
       const st = el.querySelector(".stamp"); st.textContent = c.verdict; st.className = "stamp bad show";
       whyEl.innerHTML = c.why;
-      await sleep(2600);
+      await sleep(1700);
       cols[g].classList.remove("fail");
-      el.style.opacity = "0"; await sleep(500); el.remove();
+      el.style.opacity = "0"; await sleep(300); el.remove();
       return;
     }
-    if (g <= 4) { cols[g].classList.add("pass"); await sleep(450); cols[g].classList.remove("pass"); }
+    if (g <= 4) { cols[g].classList.add("pass"); await sleep(220); cols[g].classList.remove("pass"); }
   }
   const st = el.querySelector(".stamp"); st.textContent = c.verdict; st.className = "stamp ok show";
   cols[5].classList.add("pass");
   whyEl.innerHTML = c.why;
-  await sleep(2800);
+  await sleep(1900);
   cols[5].classList.remove("pass");
-  el.style.opacity = "0"; await sleep(500); el.remove();
+  el.style.opacity = "0"; await sleep(300); el.remove();
 }
 
 let running = false;
 async function loop() {
   if (running) return; running = true;
-  while (true) { for (const c of CLAIMS) await runClaim(c); await sleep(600); }
+  while (true) { for (const c of CLAIMS) await runClaim(c); await sleep(250); }
 }
 new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { loop(); o.disconnect(); } }, { threshold: .3 }).observe(stage);
 addEventListener("resize", () => stage.querySelectorAll(".claim").forEach(el => {
