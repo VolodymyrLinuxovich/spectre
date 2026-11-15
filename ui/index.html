@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spectre Referee</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #f7f5f0;
+  --card: #fffefb;
+  --ink: #1d1c1a;
+  --ink-2: #4a4741;
+  --ink-3: #807b72;
+  --rule: #e3dfd6;
+  --rule-2: #d3cec2;
+  --accent: #2a4f86;
+  --accent-soft: #e8edf5;
+
+  --v-promoted: #3c6e4f;  --v-promoted-bg: #eaf1ec;
+  --v-noise:    #6f6a60;  --v-noise-bg:    #efede8;
+  --v-leak:     #9b3d33;  --v-leak-bg:     #f6e9e6;
+  --v-prior:    #94661c;  --v-prior-bg:    #f6efe1;
+  --v-overfit:  #6b4f80;  --v-overfit-bg:  #f0ebf4;
+  --v-crash:    #4d5864;  --v-crash-bg:    #e9ecef;
+  --v-pending:  #807b72;  --v-pending-bg:  #f2f0ea;
+
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper); color: var(--ink);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 2px; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 0 32px; }
+
+/* masthead */
+.mast { border-bottom: 1px solid var(--rule-2); background: var(--paper); }
+.mast .wrap { display: flex; align-items: flex-end; gap: 28px; padding-top: 22px; padding-bottom: 16px; }
+.brand { font: 600 34px/1 var(--serif); letter-spacing: -0.01em; }
+.pitch { font: italic 400 19px/1.3 var(--serif); color: var(--ink-2); flex: 1; padding-bottom: 2px; }
+.status { font-size: 12.5px; color: var(--ink-3); text-align: right; white-space: nowrap; padding-bottom: 3px; }
+.status .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--v-promoted); margin-right: 6px; vertical-align: 1px; }
+.status .dot.stale { background: var(--rule-2); }
+.sample-flag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 3px; background: var(--v-prior-bg); color: var(--v-prior); font-weight: 600; }
+
+/* tag tabs */
+.tabs { display: flex; gap: 4px; align-items: center; padding: 14px 0 0; flex-wrap: wrap; }
+.tabs .lbl { color: var(--ink-3); font-size: 13px; margin-right: 8px; }
+.tab { border: 1px solid var(--rule-2); background: transparent; color: var(--ink-2); font: 500 13px var(--sans); padding: 4px 12px; border-radius: 999px; cursor: pointer; }
+.tab:hover { border-color: var(--ink-3); }
+.tab.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.tab .n { opacity: .6; margin-left: 4px; font-weight: 400; }
+
+/* overview band */
+.band { display: grid; grid-template-columns: 1.55fr 1fr; gap: 0; margin: 16px 0 24px; background: var(--card); border: 1px solid var(--rule); border-radius: 6px; }
+.band > section { padding: 18px 22px 18px; }
+.band > section + section { border-left: 1px solid var(--rule); }
+h2 { font: 500 17px/1.25 var(--serif); margin: 0 0 2px; letter-spacing: 0; }
+.sub { color: var(--ink-3); font-size: 12.5px; margin: 0 0 12px; }
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.chart .head { display: flex; align-items: baseline; justify-content: space-between; }
+.chart .name { font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+.chart .big { font: 500 28px/1.1 var(--serif); }
+.chart .delta { font-size: 12.5px; color: var(--v-promoted); margin-left: 6px; font-family: var(--sans); }
+.chart svg { display: block; width: 100%; height: auto; margin-top: 6px; overflow: visible; }
+
+.counts { display: flex; gap: 22px; margin-bottom: 14px; }
+.counts .k { font: 500 28px/1.05 var(--serif); }
+.counts .l { font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
+.counts { flex-wrap: wrap; row-gap: 10px; }
+.stack { display: flex; height: 26px; border-radius: 3px; overflow: hidden; background: var(--rule); }
+.stack > div { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 600; min-width: 0; }
+.legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 14px; margin-top: 11px; font-size: 12.5px; }
+.legend span.sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+.legend b { font-weight: 600; margin-left: 2px; }
+.legend .w { color: var(--ink-3); }
+
+/* layout */
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 28px; align-items: start; padding-bottom: 48px; }
+.feedhead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid var(--rule-2); padding-bottom: 8px; }
+.feedhead h2 { font-size: 21px; }
+.filters { display: flex; gap: 2px; }
+.filters button { background: none; border: 0; padding: 3px 9px; font: 500 13px var(--sans); color: var(--ink-3); cursor: pointer; border-radius: 4px; }
+.filters button.on { color: var(--ink); background: var(--rule); }
+
+/* cards */
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; margin-bottom: 14px; display: grid; grid-template-columns: minmax(0, 1fr) 360px; overflow: hidden; }
+.card.fresh { animation: fresh 2.4s ease-out; }
+@keyframes fresh { from { box-shadow: 0 0 0 3px var(--accent-soft); } to { box-shadow: 0 0 0 0 transparent; } }
+.card .body { padding: 15px 20px 16px; }
+.meta { font-size: 12.5px; color: var(--ink-3); display: flex; gap: 10px; flex-wrap: wrap; }
+.meta .who { color: var(--ink-2); font-weight: 600; }
+.hyp { font: 500 18.5px/1.3 var(--serif); margin: 4px 0 4px; }
+.mech { color: var(--ink-2); margin: 0 0 10px; font-size: 13.5px; }
+.row { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-top: 1px dashed var(--rule); font-size: 13px; }
+.row .h { color: var(--ink-3); font-size: 12.5px; padding-top: 1px; }
+.row ul { list-style: none; margin: 0; padding: 0; }
+.row li { margin: 0 0 3px; }
+.src .dom { color: var(--ink-3); font-size: 12px; margin-left: 4px; }
+.src .cited { font-size: 11.5px; color: var(--accent); background: var(--accent-soft); padding: 0 5px; border-radius: 3px; margin-left: 5px; font-weight: 600; }
+.mem .vt { font-weight: 600; }
+.mem .other { color: var(--accent); font-weight: 600; }
+.mem .q { color: var(--ink-3); }
+.muted { color: var(--ink-3); }
+
+/* verdict panel */
+.vp { border-left: 1px solid var(--rule); padding: 15px 18px 16px; position: relative; }
+.vp::before { content: ""; position: absolute; left: -1px; top: 0; bottom: 0; width: 4px; background: var(--vc); }
+.vword { font: 600 22px/1 var(--serif); color: var(--vc); letter-spacing: .01em; }
+.vby { font-size: 12px; color: var(--ink-3); margin-top: 3px; }
+.plain { font: 400 15px/1.38 var(--serif); margin: 9px 0 8px; color: var(--ink); }
+.evid { font-size: 12.5px; color: var(--ink-2); background: var(--vbg); padding: 6px 9px; border-radius: 4px; margin-bottom: 10px; }
+.nums { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 12.5px; }
+.nums dt { color: var(--ink-3); }
+.nums dd { margin: 0; text-align: right; white-space: nowrap; }
+.nums dd .muted { font-size: 11.5px; }
+.nums dd.bad { color: var(--vc); font-weight: 600; }
+.strip { margin: 4px 0 10px; }
+.strip svg { width: 100%; height: auto; display: block; }
+.naive { font-size: 13px; margin-bottom: 10px; }
+.naive .acc { font-weight: 600; }
+.audit { border-top: 1px dashed var(--rule-2); padding-top: 10px; margin-top: 4px; }
+
+/* aside */
+aside > section { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; margin-bottom: 18px; }
+aside { position: sticky; top: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: right; font-weight: 500; color: var(--ink-3); font-size: 12px; padding: 0 0 6px 8px; border-bottom: 1px solid var(--rule-2); vertical-align: bottom; line-height: 1.25; }
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+td { white-space: nowrap; text-align: right; padding: 7px 0 7px 8px; border-bottom: 1px solid var(--rule); }
+td.tagname { font-weight: 600; }
+td .bar { display: inline-block; height: 6px; border-radius: 2px; background: var(--accent); vertical-align: 1px; margin-right: 6px; }
+tr.sel td { background: var(--accent-soft); }
+.note { font-size: 12px; color: var(--ink-3); margin: 10px 0 0; line-height: 1.45; }
+.reads li { font-size: 13px; margin-bottom: 6px; list-style: none; }
+.reads { padding: 0; margin: 0; }
+.empty { color: var(--ink-3); padding: 30px 0; text-align: center; font: italic 16px var(--serif); }
+
+@media (max-width: 1100px) {
+  .cols { grid-template-columns: 1fr; }
+  aside { position: static; }
+  .band { grid-template-columns: 1fr; }
+  .band > section + section { border-left: 0; border-top: 1px solid var(--rule); }
+}
+@media (max-width: 760px) {
+  .wrap { padding: 0 16px; }
+  .card { grid-template-columns: 1fr; }
+  .vp { border-left: 0; border-top: 1px solid var(--rule); }
+  .charts { grid-template-columns: 1fr; }
+  .mast .wrap { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<header class="mast">
+  <div class="wrap">
+    <div class="brand">Spectre</div>
+    <div class="pitch">AI scientists don't need more ideas. They need an evaluator they can't fool.</div>
+    <div class="status" id="status"><span class="dot stale"></span>connecting</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav class="tabs" id="tabs"></nav>
+
+  <div class="band">
+    <section>
+      <h2>Incumbent model on validation</h2>
+      <p class="sub" id="incsub">Moves only when the Referee promotes a change. MassSpecGym retrieval, formula candidates.</p>
+      <div class="charts">
+        <div class="chart" id="c-mrr"></div>
+        <div class="chart" id="c-hit1"></div>
+      </div>
+    </section>
+    <section>
+      <h2>Claims against verdicts</h2>
+      <p class="sub">Every claim goes to the Referee. Most do not survive.</p>
+      <div class="counts" id="counts"></div>
+      <div class="stack" id="stack"></div>
+      <div class="legend" id="legend"></div>
+    </section>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="feedhead">
+        <h2>Experiments, newest first</h2>
+        <div class="filters" id="filters">
+          <button data-f="all" class="on">All</button>
+          <button data-f="rejected">What the swarm rejected</button>
+          <button data-f="promoted">Promoted</button>
+          <button data-f="open">In progress</button>
+        </div>
+      </div>
+      <div id="feed"></div>
+    </div>
+    <aside>
+      <section>
+        <h2>Same budget, different loops</h2>
+        <p class="sub">Precision counts a naive acceptance as true only if the guarded Referee later promotes the same code.</p>
+        <div id="compare"></div>
+        <p class="note" id="cmpnote"></p>
+      </section>
+      <section>
+        <h2>Agents reading each other</h2>
+        <p class="sub">Shared memory on past.dev. Reads of records another agent wrote.</p>
+        <ul class="reads" id="reads"></ul>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script>
+"use strict";
+const VERDICTS = ["PROMOTED", "NOISE", "LEAK", "PRIOR", "OVERFIT", "CRASH"];
+const REJECTED = new Set(["NOISE", "LEAK", "PRIOR", "OVERFIT", "CRASH"]);
+const VC = { PROMOTED: "promoted", NOISE: "noise", LEAK: "leak", PRIOR: "prior", OVERFIT: "overfit", CRASH: "crash" };
+const PLAIN = {
+  PROMOTED: "Survived every check and held up on the hidden test fold. It is now the incumbent.",
+  NOISE: "The gain is no bigger than the difference between two runs of the unchanged model.",
+  LEAK: "With the training labels shuffled, the gain was still there. It did not come from learning.",
+  PRIOR: "With the spectra zeroed out, most of the gain stayed. The model is not reading the spectrum.",
+  OVERFIT: "Real on validation, gone on the hidden test fold the proposer never sees.",
+  CRASH: "The code did not finish in the sandbox, so there is nothing to judge.",
+};
+const LONG = { swarm: "Swarm", naive: "Naive loop", single: "Single agent", noexa: "No Exa", nomem: "No memory" };
+
+const state = { events: [], since: 0, tag: null, filter: "all", seen: new Set(), lastOk: 0, source: "", sample: false, firstRender: true };
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function cssv(v) { return VC[v] || "pending"; }
+function sgn(x, d) { if (x == null || isNaN(x)) return "n/a"; d = d == null ? 4 : d; return (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(d); }
+function fix(x, d) { return x == null || isNaN(x) ? "n/a" : Number(x).toFixed(d == null ? 4 : d); }
+function pct(x) { return x == null || isNaN(x) ? "n/a" : Math.round(x * 100) + "%"; }
+function clock(ts) { if (!ts) return ""; const d = new Date(ts * 1000); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+function mins(s) { if (s == null) return "n/a"; return s < 90 ? Math.round(s) + " s" : (s / 60).toFixed(1) + " min"; }
+function hours(s) { return s < 3600 ? (s / 60).toFixed(0) + " min" : (s / 3600).toFixed(1) + " h"; }
+function domain(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } }
+function tagName(t) { return LONG[t] || t; }
+
+/* ---------- model: fold events into experiments ---------- */
+function build(events) {
+  const exps = new Map();        // exp_id -> exp
+  const tags = new Map();        // tag -> {start, end, events}
+  const byCode = new Map();      // code hash -> exp (naive)
+  const lastByProposer = new Map();
+  const orphanVerdicts = [];
+  let n = 0;
+  function getExp(id, tag, agent, ts) {
+    if (!exps.has(id)) exps.set(id, { id, tag: tag || "untagged", proposer: agent, first: ts, last: ts, mem: null, hyp: null, exa: null, claim: null, skipped: null, verdict: null, naive: null, audit: null, errors: [], order: n++ });
+    const e = exps.get(id);
+    if (tag && e.tag === "untagged") e.tag = tag;
+    if (ts) { e.last = Math.max(e.last || ts, ts); e.first = Math.min(e.first || ts, ts); }
+    return e;
+  }
+  for (const ev of events) {
+    const tag = ev.tag;
+    if (tag) {
+      if (!tags.has(tag)) tags.set(tag, { tag, start: ev.ts, end: null, startEv: null, last: ev.ts });
+      const t = tags.get(tag);
+      t.last = Math.max(t.last, ev.ts);
+      if (ev.kind === "start") { t.start = ev.ts; t.startEv = ev; }
+      if (ev.kind === "end") t.end = ev.ts;
+    }
+    const k = ev.kind;
+    if (k === "verdict" || k === "naive_verdict") {
+      const proposer = ev.proposer || (ev.agent !== "referee" ? ev.agent : null);
+      let e = ev.exp_id ? exps.get(ev.exp_id) : null;
+      if (!e && ev.code && byCode.has(ev.code)) e = byCode.get(ev.code);
+      if (!e && proposer && lastByProposer.has(proposer)) {
+        const c = lastByProposer.get(proposer);
+        if (!c.verdict && !c.naive && (!ev.claim || !c.hyp || c.hyp.hypothesis === ev.claim)) e = c;
+      }
+      if (!e && ev.claim) for (const c of exps.values()) if (c.hyp && c.hyp.hypothesis === ev.claim && !c.verdict && !c.naive) { e = c; break; }
+      if (!e) { e = getExp(ev.exp_id || ("v-" + (ev.code || n)), tag, proposer, ev.ts); }
+      e.last = Math.max(e.last || 0, ev.ts);
+      if (k === "naive_verdict") { e.naive = ev; if (ev.code) byCode.set(ev.code, e); }
+      else if (e.naive) e.audit = ev;
+      else e.verdict = ev;
+      if (!e.proposer && proposer) e.proposer = proposer;
+      continue;
+    }
+    if (!ev.exp_id) {
+      if (k === "error" && ev.agent) {
+        const c = lastByProposer.get(ev.agent);
+        if (c && !c.verdict && !c.naive) c.errors.push(ev);
+      }
+      continue;
+    }
+    const e = getExp(ev.exp_id, tag, ev.agent, ev.ts);
+    if (ev.agent && ev.agent.indexOf("proposer") === 0) { e.proposer = ev.agent; lastByProposer.set(ev.agent, e); }
+    if (k === "memory_read") e.mem = ev;
+    else if (k === "hypothesis") e.hyp = ev;
+    else if (k === "exa_search") e.exa = ev;
+    else if (k === "claim") { e.claim = ev; if (ev.code) byCode.set(ev.code, e); }
+    else if (k === "skipped") e.skipped = ev;
+    else if (k === "error") e.errors.push(ev);
+  }
+  return { exps: [...exps.values()], tags };
+}
+
+function status(e) {
+  if (e.verdict) return e.verdict.verdict;
+  if (e.naive) return "NAIVE_" + e.naive.verdict;
+  if (e.skipped) return "SKIPPED";
+  if (e.errors.length && !e.claim) return "ERROR";
+  if (e.claim) return "AT_REFEREE";
+  return "DRAFTING";
+}
+
+function tagStats(m, tag) {
+  const ex = m.exps.filter(e => e.tag === tag);
+  const claims = ex.filter(e => e.claim).length;
+  let accepted = 0, truePos = 0, judged = 0, compute = 0;
+  const vc = {}; VERDICTS.forEach(v => vc[v] = 0);
+  for (const e of ex) {
+    if (e.naive) {
+      compute += +e.naive.wall_s || 0;
+      if (e.naive.verdict === "ACCEPTED") {
+        accepted++;
+        if (e.audit) { judged++; if (e.audit.verdict === "PROMOTED") truePos++; }
+      }
+    }
+    if (e.verdict) {
+      compute += +e.verdict.wall_s || 0;
+      vc[e.verdict.verdict] = (vc[e.verdict.verdict] || 0) + 1;
+      if (e.verdict.verdict === "PROMOTED") { accepted++; truePos++; judged++; }
+    }
+  }
+  const naive = ex.some(e => e.naive);
+  const skipped = ex.filter(e => e.skipped).length;
+  return { tag, claims, accepted, truePos, judged, compute, vc, naive, skipped, n: ex.length,
+           precision: judged ? truePos / judged : null, unjudged: accepted - judged };
+}
+
+/* ---------- incumbent chart ---------- */
+function incumbentSeries(m, tag) {
+  const vs = m.exps.filter(e => e.tag === tag && e.verdict && e.verdict.val).map(e => e.verdict).sort((a, b) => a.ts - b.ts);
+  const t = m.tags.get(tag);
+  if (!vs.length) return null;
+  const pts = [{ ts: (t && t.start) || vs[0].ts, m: vs[0].base_val || vs[0].val, promo: false }];
+  for (const v of vs) if (v.verdict === "PROMOTED") pts.push({ ts: v.ts, m: v.val, promo: true, v });
+  const end = (t && (t.end || t.last)) || pts[pts.length - 1].ts;
+  return { pts, end };
+}
+
+function lineChart(el, series, key, label) {
+  if (!series) { el.innerHTML = `<div class="head"><span class="name">${label}</span></div><div class="muted" style="padding:30px 0;font-size:13px">No Referee verdicts yet.</div>`; return; }
+  const W = 300, H = 96, pl = 0, pr = 46, pt = 8, pb = 16;
+  const pts = series.pts.filter(p => p.m && p.m[key] != null);
+  if (!pts.length) { el.innerHTML = ""; return; }
+  const t0 = pts[0].ts, t1 = Math.max(series.end, t0 + 1);
+  const ys = pts.map(p => p.m[key]);
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  const pad = Math.max((hi - lo) * 0.25, 0.004); lo -= pad; hi += pad;
+  const X = ts => pl + (W - pl - pr) * (ts - t0) / (t1 - t0);
+  const Y = y => pt + (H - pt - pb) * (1 - (y - lo) / (hi - lo));
+  let d = `M${X(pts[0].ts).toFixed(1)},${Y(ys[0]).toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) d += ` H${X(pts[i].ts).toFixed(1)} V${Y(ys[i]).toFixed(1)}`;
+  d += ` H${X(t1).toFixed(1)}`;
+  const last = ys[ys.length - 1], first = ys[0];
+  const base = Y(first);
+  let dots = "";
+  pts.forEach((p, i) => { if (p.promo) dots += `<circle cx="${X(p.ts).toFixed(1)}" cy="${Y(ys[i]).toFixed(1)}" r="3.4" fill="var(--card)" stroke="var(--accent)" stroke-width="1.6"><title>Promoted at ${clock(p.ts)}: ${esc(p.v.claim || "")}</title></circle>`; });
+  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label} over time">
+    <line x1="${pl}" x2="${W - pr}" y1="${base}" y2="${base}" stroke="var(--rule-2)" stroke-dasharray="2 3"/>
+    <text x="${W - pr + 6}" y="${base + 4}" font-size="10.5" fill="var(--ink-3)">${fix(first, 3)}</text>
+    <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="1.8" vector-effect="non-scaling-stroke"/>
+    ${dots}
+    <text x="${W - pr + 6}" y="${Y(last) + 4}" font-size="11" font-weight="600" fill="var(--ink)">${last !== first ? fix(last, 3) : ""}</text>
+    <text x="${pl}" y="${H - 2}" font-size="10.5" fill="var(--ink-3)">${clock(t0).slice(0, 5)}</text>
+    <text x="${W - pr}" y="${H - 2}" font-size="10.5" fill="var(--ink-3)" text-anchor="end">${clock(t1).slice(0, 5)}</text>
+  </svg>`;
+  const delta = last - first;
+  el.innerHTML = `<div class="head"><span class="name">${label}</span><span><span class="big">${fix(last, 3)}</span>${delta > 0 ? `<span class="delta">${sgn(delta, 3)}</span>` : ""}</span></div>${svg}`;
+}
+
+/* ---------- gain vs noise strip ---------- */
+function strip(v) {
+  if (v.val_gain == null) return "";
+  const g = +v.val_gain, nb = +(v.noise_band || 0), ci = v.val_ci || [g, g];
+  const vals = [g, nb, -nb, ci[0], ci[1], 0];
+  if (v.test_gain != null) vals.push(v.test_gain, ...(v.test_ci || []));
+  const m = Math.max(...vals.map(Math.abs), 0.002) * 1.15;
+  const W = 300, X = x => W / 2 + (W / 2 - 4) * x / m;
+  let s = `<svg viewBox="0 0 ${W} 34" aria-label="Gain against noise band">
+    <rect x="${X(-nb)}" y="4" width="${X(nb) - X(-nb)}" height="16" fill="var(--rule)"/>
+    <line x1="${X(0)}" x2="${X(0)}" y1="1" y2="23" stroke="var(--ink-3)" stroke-width="1"/>
+    <line x1="${X(ci[0])}" x2="${X(ci[1])}" y1="12" y2="12" stroke="var(--vc)" stroke-width="2"/>
+    <circle cx="${X(g)}" cy="12" r="4" fill="var(--vc)"/>
+    <text x="${X(-nb) + 3}" y="32" font-size="9.5" fill="var(--ink-3)">noise band</text>`;
+  if (v.test_gain != null) {
+    const tc = v.test_ci || [v.test_gain, v.test_gain];
+    s += `<line x1="${X(tc[0])}" x2="${X(tc[1])}" y1="19" y2="19" stroke="var(--ink)" stroke-width="1.2"/><rect x="${X(v.test_gain) - 3}" y="16" width="6" height="6" fill="var(--card)" stroke="var(--ink)" stroke-width="1.2"/>`;
+  }
+  s += `</svg>`;
+  return `<div class="strip" title="Dot: validation gain with 95% CI. Grey: noise band (2 seed sigma). Square: hidden test gain.">${s}</div>`;
+}
+
+/* ---------- verdict panel ---------- */
+function verdictPanel(v, by) {
+  const vv = v.verdict;
+  const g = v.val_gain;
+  let nums = "";
+  const row = (k, val, bad) => nums += `<dt>${k}</dt><dd${bad ? ' class="bad"' : ""}>${val}</dd>`;
+  if (g != null) {
+    row("Val gain, MRR@20", sgn(g) + (v.val_ci ? ` <span class="muted">[${sgn(v.val_ci[0])}, ${sgn(v.val_ci[1])}]</span>` : ""), vv === "NOISE" && v.val_ci && v.val_ci[0] <= 0);
+    if (v.noise_band != null) row("Noise band", "±" + fix(v.noise_band), vv === "NOISE" && g <= v.noise_band);
+    if (v.per_seed_gain) row("Per seed", v.per_seed_gain.map(x => sgn(x, 3)).join("  "), vv === "NOISE" && Math.min(...v.per_seed_gain) <= 0);
+  }
+  if (v.shuffle_gain != null) row("Labels shuffled", sgn(v.shuffle_gain) + ` <span class="muted">${g ? pct(v.shuffle_gain / g) + " kept" : ""}</span>`, vv === "LEAK");
+  if (v.ablate_gain != null) row("Spectra zeroed", sgn(v.ablate_gain) + ` <span class="muted">${g ? pct(v.ablate_gain / g) + " kept" : ""}</span>`, vv === "PRIOR");
+  if (v.test_gain != null) row("Hidden test", sgn(v.test_gain) + (v.test_ci ? ` <span class="muted">[${sgn(v.test_ci[0])}, ${sgn(v.test_ci[1])}]</span>` : ""), vv === "OVERFIT");
+  if (v.val && v.base_val && v.val.hit1 != null) row("hit@1, seed 0", `${fix(v.base_val.hit1, 3)} → ${fix(v.val.hit1, 3)}`);
+  if (v.wall_s != null) row("Referee compute", mins(v.wall_s));
+  const evidence = v.evidence || v.error || "";
+  return `<div class="vword">${esc(vv)}</div>
+    <div class="vby">${esc(by || "Referee")}, ${clock(v.ts)}</div>
+    <p class="plain">${esc(PLAIN[vv] || "")}</p>
+    ${evidence ? `<div class="evid">${esc(evidence)}</div>` : ""}
+    ${strip(v)}
+    <dl class="nums">${nums}</dl>`;
+}
+
+/* ---------- card ---------- */
+function memLine(h, me) {
+  const who = (h.authors || []).join(", ") || "unknown";
+  const other = (h.authors || []).some(a => a !== me);
+  const exp = (h.exp_ids || [])[0] || "";
+  const v = h.verdict;
+  let what;
+  if (!v || v === "CLAIM") what = "unverified claim";
+  else if (v === "NOTE") what = "skip note";
+  else what = `<span class="vt" style="color:var(--v-${cssv(v)})">${esc(v)}</span> verdict`;
+  const txt = (h.content || "").replace(/\s+/g, " ").slice(0, 300);
+  return `<li title="${esc(txt)}">Read ${what} by <span class="${other ? "other" : ""}">${esc(who)}</span>${exp ? " on " + esc(exp) : ""}</li>`;
+}
+
+function card(e) {
+  const st = status(e);
+  const v = e.verdict;
+  const vv = v ? v.verdict : (e.audit ? e.audit.verdict : null);
+  const hy = e.hyp || {};
+  const title = hy.hypothesis || (v && v.claim) || (e.naive && e.naive.claim) || "Drafting a hypothesis";
+  let rows = "";
+  if (e.mem) {
+    const hits = e.mem.hits || [];
+    const others = (e.mem.authors || []).filter(a => a !== e.proposer);
+    rows += `<div class="row mem"><div class="h">Memory</div><div>${hits.length ? `<ul>${hits.map(h => memLine(h, e.proposer)).join("")}</ul>` + (others.length ? `<div class="muted">Used records written by ${esc(others.join(", "))}.</div>` : "") : `<span class="muted">Nothing in shared memory yet.</span>`}</div></div>`;
+  }
+  if (e.exa) {
+    const cited = new Set(((e.claim && e.claim.citations) || (e.skipped && e.skipped.citations) || []).map(c => (String(c).match(/<([^>]+)>/) || [])[1]).filter(Boolean));
+    const res = e.exa.results || [];
+    rows += `<div class="row src"><div class="h">Exa</div><div>${res.length ? `<ul>${res.map(r => `<li><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.url)}</a><span class="dom">${esc(domain(r.url))}${r.published ? ", " + esc(String(r.published).slice(0, 4)) : ""}</span>${cited.has(r.url) ? '<span class="cited">cited</span>' : ""}</li>`).join("")}</ul>` : '<span class="muted">No results.</span>'}<div class="muted">Query: ${esc(e.exa.query || "")}</div></div></div>`;
+  }
+  if (e.claim) {
+    rows += `<div class="row"><div class="h">Claim</div><div>${esc(e.claim.change || "")}${e.claim.expected ? ` <span class="muted">Expected ${esc(e.claim.expected)}.</span>` : ""}</div></div>`;
+  }
+  if (e.skipped) {
+    rows += `<div class="row"><div class="h">Skipped</div><div>${esc(e.skipped.reason || "")} <span class="muted">No compute spent.</span></div></div>`;
+  }
+  for (const er of e.errors) rows += `<div class="row"><div class="h">Error</div><div class="muted">${esc(er.error || "")}</div></div>`;
+
+  let panel, cls;
+  if (v) { cls = cssv(v.verdict); panel = verdictPanel(v, "Referee"); }
+  else if (e.naive) {
+    const nv = e.naive;
+    cls = e.audit ? cssv(e.audit.verdict) : "pending";
+    panel = `<div class="naive"><span class="muted">Naive loop, seed 0, val only:</span><br><span class="acc">${esc(nv.verdict)}</span> at ${sgn(nv.val_gain)} MRR@20</div>` +
+      (e.audit ? `<div class="audit">${verdictPanel(e.audit, "Guarded Referee, re-run")}</div>` : `<p class="plain muted">${nv.verdict === "ACCEPTED" ? "Not yet re-judged by the guarded Referee." : "Rejected by its own loop."}</p>`);
+  } else if (e.skipped) {
+    cls = "pending";
+    panel = `<div class="vword" style="color:var(--ink-2)">Skipped</div><p class="plain">The proposer found this already tested or already in the incumbent, and dropped it before spending compute.</p>`;
+  } else if (e.claim) {
+    cls = "pending";
+    panel = `<div class="vword" style="color:var(--ink-3)">At the Referee</div><p class="plain muted">Three seeds, label-shuffle and spectrum-ablation canaries, then the hidden test fold if it gets that far.</p>`;
+  } else {
+    cls = "pending";
+    panel = `<div class="vword" style="color:var(--ink-3)">${e.errors.length ? "Failed" : "Drafting"}</div><p class="plain muted">${e.errors.length ? "The proposer could not produce a valid model." : "Reading memory and prior work."}</p>`;
+  }
+  const fresh = !state.firstRender && !state.seen.has(e.id + st) ? " fresh" : "";
+  state.seen.add(e.id + st);
+  return `<article class="card${fresh}" style="--vc:var(--v-${cls});--vbg:var(--v-${cls}-bg)">
+    <div class="body">
+      <div class="meta"><span class="who">${esc(e.proposer || "proposer")}</span><span>${esc(e.id)}</span><span>${esc(tagName(e.tag))}</span><span>${clock(e.first)}</span></div>
+      <div class="hyp">${esc(title)}</div>
+      ${hy.mechanism ? `<p class="mech">${esc(hy.mechanism)}</p>` : ""}
+      ${rows}
+    </div>
+    <div class="vp">${panel}</div>
+  </article>`;
+}
+
+/* ---------- render ---------- */
+function render() {
+  const m = build(state.events);
+  const tagList = [...m.tags.values()].filter(t => m.exps.some(e => e.tag === t.tag && (e.claim || e.skipped || e.hyp)));
+  if (!state.tag || !tagList.some(t => t.tag === state.tag)) {
+    state.tag = (tagList.find(t => t.tag === "swarm") || tagList[0] || {}).tag || null;
+  }
+  // tabs
+  document.getElementById("tabs").innerHTML = `<span class="lbl">Run</span>` + tagList.map(t => {
+    const n = m.exps.filter(e => e.tag === t.tag && e.claim).length;
+    return `<button class="tab${t.tag === state.tag ? " on" : ""}" data-tag="${esc(t.tag)}">${esc(tagName(t.tag))}<span class="n">${n}</span></button>`;
+  }).join("");
+
+  const tag = state.tag;
+  const s = tag ? tagStats(m, tag) : null;
+  const ser = tag ? incumbentSeries(m, tag) : null;
+  lineChart(document.getElementById("c-mrr"), ser, "mrr", "MRR@20");
+  lineChart(document.getElementById("c-hit1"), ser, "hit1", "hit@1");
+  const promos = ser ? ser.pts.filter(p => p.promo).length : 0;
+  document.getElementById("incsub").textContent = `Moves only when the Referee promotes a change. ${promos} promotion${promos === 1 ? "" : "s"} in this run. MassSpecGym retrieval, formula candidates, 4000 val spectra.`;
+
+  // counts + breakdown
+  if (s) {
+    const judgedN = VERDICTS.reduce((a, v) => a + s.vc[v], 0);
+    const rej = judgedN - s.vc.PROMOTED;
+    const naiveAcc = s.naive ? s.accepted : null;
+    document.getElementById("counts").innerHTML =
+      `<div><div class="k">${s.claims}</div><div class="l">claims made</div></div>` +
+      (s.naive ? `<div><div class="k">${naiveAcc}</div><div class="l">accepted by naive loop</div></div><div><div class="k">${s.truePos}</div><div class="l">survive the Referee</div></div>`
+               : `<div><div class="k">${s.vc.PROMOTED}</div><div class="l">promoted</div></div><div><div class="k">${rej}</div><div class="l">rejected, with evidence</div></div>`) +
+      (s.skipped ? `<div><div class="k">${s.skipped}</div><div class="l">skipped, no compute</div></div>` : "");
+    let vc = s.vc, total = judgedN;
+    if (s.naive) { vc = {}; VERDICTS.forEach(v => vc[v] = 0); m.exps.filter(e => e.tag === tag && e.audit).forEach(e => vc[e.audit.verdict]++); total = VERDICTS.reduce((a, v) => a + vc[v], 0); }
+    document.getElementById("stack").innerHTML = total ? VERDICTS.filter(v => vc[v]).map(v => `<div style="flex:${vc[v]};background:var(--v-${cssv(v)})" title="${v}: ${vc[v]}">${vc[v]}</div>`).join("") : "";
+    document.getElementById("legend").innerHTML = VERDICTS.map(v => `<div><span class="sw" style="background:var(--v-${cssv(v)})"></span>${v}<b>${vc[v]}</b> <span class="w">${{ PROMOTED: "real gain", NOISE: "within seed noise", LEAK: "survives shuffled labels", PRIOR: "survives no spectra", OVERFIT: "fails hidden test", CRASH: "did not run" }[v]}</span></div>`).join("") +
+      (s.naive ? `<div style="grid-column:1/-1" class="w">Breakdown shows the guarded Referee re-judging what the naive loop accepted.</div>` : "");
+  }
+
+  // feed
+  let ex = m.exps.filter(e => e.tag === tag);
+  const f = state.filter;
+  ex = ex.filter(e => {
+    const v = e.verdict ? e.verdict.verdict : (e.audit ? e.audit.verdict : null);
+    if (f === "rejected") return v && REJECTED.has(v) || (e.naive && e.naive.verdict === "REJECTED") || !!e.skipped;
+    if (f === "promoted") return v === "PROMOTED";
+    if (f === "open") return !v && !e.naive && !e.skipped;
+    return true;
+  });
+  ex.sort((a, b) => (b.last || 0) - (a.last || 0));
+  document.getElementById("feed").innerHTML = ex.length ? ex.map(card).join("") : `<div class="empty">${state.events.length ? "Nothing here yet." : "Waiting for the first event in " + esc(state.source || "runs/events.jsonl") + "."}</div>`;
+
+  // comparison
+  const rows = tagList.map(t => tagStats(m, t.tag)).filter(r => r.claims || r.n);
+  const maxC = Math.max(1, ...rows.map(r => r.compute));
+  document.getElementById("compare").innerHTML = `<table><thead><tr><th>Run</th><th>Claims</th><th>Accepted</th><th>True promotions</th><th>Precision</th><th>Compute</th></tr></thead><tbody>` +
+    rows.map(r => `<tr class="${r.tag === tag ? "sel" : ""}"><td class="tagname">${esc(tagName(r.tag))}</td><td>${r.claims}</td><td>${r.accepted}</td><td>${r.truePos}${r.unjudged ? `<span class="muted"> +${r.unjudged}?</span>` : ""}</td><td>${r.precision == null ? '<span class="muted">n/a</span>' : `<b>${pct(r.precision)}</b>`}</td><td><span class="bar" style="width:${Math.max(2, 34 * r.compute / maxC)}px"></span>${hours(r.compute)}</td></tr>`).join("") + `</tbody></table>`;
+  const anyUnj = rows.some(r => r.unjudged);
+  document.getElementById("cmpnote").textContent = "Compute is summed Referee wall time." + (anyUnj ? " A \"+n?\" means accepted claims not yet re-judged; precision is over judged ones." : "");
+
+  // cross-agent reads
+  const reads = [];
+  for (const e of m.exps.filter(x => x.tag === tag && x.mem)) {
+    for (const h of e.mem.hits || []) if ((h.authors || []).some(a => a !== e.proposer)) reads.push({ e, h, ts: e.mem.ts });
+  }
+  reads.sort((a, b) => b.ts - a.ts);
+  document.getElementById("reads").innerHTML = reads.length ? reads.slice(0, 9).map(r => {
+    const v = r.h.verdict;
+    const what = !v || v === "CLAIM" ? "an unverified claim" : v === "NOTE" ? "a skip note" : `the <span style="color:var(--v-${cssv(v)});font-weight:600">${esc(v)}</span> verdict`;
+    return `<li><b>${esc(r.e.proposer)}</b> read ${what} by ${esc((r.h.authors || []).join(", "))} on ${esc((r.h.exp_ids || [])[0] || "")}, before proposing ${esc(r.e.id)}.</li>`;
+  }).join("") : `<li class="muted">No cross-agent reads in this run.</li>`;
+  state.firstRender = false;
+}
+
+/* ---------- polling ---------- */
+let inflight = false;
+async function poll() {
+  if (inflight) return;
+  inflight = true;
+  try {
+    const r = await fetch(`/events?since=${state.since}`, { cache: "no-store" });
+    const j = await r.json();
+    state.source = j.source; state.sample = j.sample; state.lastOk = Date.now();
+    if (j.events && j.events.length) {
+      state.events.push(...j.events);
+      state.events.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+      state.since = Math.max(state.since, ...j.events.map(e => +e.ts || 0));
+      render();
+    } else if (state.firstRender) render();
+    document.getElementById("status").innerHTML = `<span class="dot"></span>Live from ${esc(j.source)}, ${state.events.length} events${j.sample ? '<span class="sample-flag">Sample data</span>' : ""}`;
+  } catch (err) {
+    document.getElementById("status").innerHTML = `<span class="dot stale"></span>Server unreachable, retrying`;
+  } finally { inflight = false; }
+}
+
+document.getElementById("tabs").addEventListener("click", ev => {
+  const b = ev.target.closest(".tab"); if (!b) return;
+  state.tag = b.dataset.tag; render();
+});
+document.getElementById("filters").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  state.filter = b.dataset.f;
+  document.querySelectorAll("#filters button").forEach(x => x.classList.toggle("on", x === b));
+  render();
+});
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>
