@@ -24,7 +24,7 @@ SF AI Research Hackathon, November 14 and 15, 2026. Sponsor challenges entered: 
 
 | | |
 |---|---|
-| **The task** | [MassSpecGym](https://huggingface.co/datasets/roman-bushuiev/MassSpecGym) retrieval. Given an MS/MS spectrum, rank candidate molecules with the same formula. Scored by MRR@20 and hit@1, 5, 20 |
+| **The task** | [MassSpecGym](https://huggingface.co/datasets/roman-bushuiev/MassSpecGym) retrieval. Given an MS/MS spectrum, rank up to 256 candidate molecules with the same formula. We use the official MCES-disjoint train, val and test folds [[1]](#references). The Referee decides on MRR@20; we also report hit@1, hit@5, hit@20 |
 | **The trap** | In the raw candidate lists the true molecule is first for **4,000 of 4,000** val spectra and 4,000 of 4,000 test spectra. An agent that "discovers" this gets a perfect score |
 | **Try it** | `python3 ui/server.py`, then open http://localhost:8765 to watch the swarm. `SPECTRE_SAMPLE=1` shows sample data |
 | **Pitch** | [PITCH.md](PITCH.md) |
@@ -52,61 +52,89 @@ A proposer's claim is worth nothing until the Referee promotes it.
 
 ### The math behind each verdict
 
-Spectrum $i$ has $n_i$ candidate molecules. A model returns a ranking, and $r_i$ is the 0-based position of the true
-molecule in its top 20. The score is truncated mean reciprocal rank:
+Spectrum $`i`$ has $`n_i \le 256`$ candidate molecules with the same mass [[1]](#references). A model returns a
+ranking, and $`r_i \in \{0, \dots, 19\}`$ is the 0-based position of the true molecule in its top 20, or $`r_i = -1`$
+if it is not there. Code: `truth_ranks`, `rr_vec` and `metrics` in `bench/referee.py`.
 
-$$
-\mathrm{RR}_i = \begin{cases} \dfrac{1}{r_i + 1} & r_i < 20 \\[4pt] 0 & \text{otherwise} \end{cases}
+```math
+\mathrm{RR}_i =
+\begin{cases}
+  \dfrac{1}{r_i + 1}, & r_i \ge 0 \\
+  0, & r_i = -1
+\end{cases}
 \qquad
-\mathrm{MRR@20} = \frac{1}{N}\sum_{i=1}^{N} \mathrm{RR}_i
-$$
-
-Guessing at random gives $\mathbb{E}[\text{hit@1}] = \frac{1}{N}\sum_i \frac{1}{n_i} = 0.0377$ on our val split.
-
-**Paired gain.** The candidate (c) and the incumbent (b) are run on the same spectra with the same seeds
-$s \in \{0, 1, 2\}$. For each spectrum we average over seeds, then take the difference:
-
-$$
-d_i = \frac{1}{S}\sum_{s=1}^{S}\left(\mathrm{RR}^{c}_{i,s} - \mathrm{RR}^{b}_{i,s}\right)
+\mathrm{MRR@20} = \frac{1}{N} \sum_{i=1}^{N} \mathrm{RR}_i
 \qquad
-\Delta = \frac{1}{N}\sum_{i=1}^{N} d_i
-$$
+\mathrm{hit@}k = \frac{1}{N} \sum_{i=1}^{N} \mathbf{1}\left[0 \le r_i < k\right]
+```
+
+MassSpecGym reports hit@1, hit@5 and hit@20 [[1]](#references). We report those too, but the Referee decides on
+MRR@20. It moves with every change in rank inside the top 20, not only at a cutoff, so smaller real gains show up.
+Ranking at random gives an expected hit@1 of $`\frac{1}{N}\sum_i \frac{1}{n_i} = 0.0377`$ on our val split.
+
+**Paired gain.** The candidate $`c`$ and the incumbent $`b`$ are trained and scored on the same $`N = 4000`$ val
+spectra with the same seeds $`s \in \{0, 1, 2\}`$. For each spectrum we average the difference over seeds:
+
+```math
+d_i = \frac{1}{3} \sum_{s=0}^{2} \left( \mathrm{RR}^{c}_{i,s} - \mathrm{RR}^{b}_{i,s} \right)
+\qquad
+\Delta = \frac{1}{N} \sum_{i=1}^{N} d_i
+\qquad
+\Delta_s = \mathrm{MRR}^{c}_{s} - \mathrm{MRR}^{b}_{s}
+```
 
 **NOISE** unless all three hold:
 
-$$
-\underbrace{\Delta > 2\,\sigma_{\text{seed}}}_{\text{beats retraining noise}}
+```math
+\underbrace{\Delta > 2\,\sigma_{\mathrm{seed}}}_{\text{beats retraining noise}}
 \qquad
-\underbrace{\mathrm{CI}^{95\%}_{\text{lo}}(\Delta) > 0}_{\text{beats spectrum sampling noise}}
+\underbrace{\mathrm{CI}^{95\%}_{\mathrm{lo}}(\Delta) > 0}_{\text{beats spectrum sampling noise}}
 \qquad
-\underbrace{\Delta_s > 0 \;\; \forall s}_{\text{holds on every seed}}
-$$
+\underbrace{\Delta_s > 0 \ \text{ for } s = 0, 1, 2}_{\text{holds on every seed}}
+```
 
-where $\sigma_{\text{seed}}$ is the standard deviation of the incumbent's MRR@20 across seeds, and the CI comes from a
-paired bootstrap over spectra ($B = 2000$ resamples of $\{d_i\}$ with replacement, 2.5th and 97.5th percentiles).
-The two noise sources are different. Seed noise is what you get by retraining the same code. Sampling noise is what
-you get from which 4,000 spectra happen to be in val. A real gain has to beat both.
+Here $`\sigma_{\mathrm{seed}}`$ is the sample standard deviation of the incumbent's $`\mathrm{MRR}^{b}_{s}`$ over the
+three seeds. The CI is a percentile bootstrap over spectra [[2]](#references): $`B = 2000`$ resamples of
+$`\{d_1, \dots, d_N\}`$ with replacement, then the 2.5th and 97.5th percentiles of their means. Pairing on the same
+spectra is the standard paired bootstrap for comparing two systems on one test set [[3]](#references)[[4]](#references).
 
-**LEAK** and **PRIOR** use canaries. Each one removes the thing a real gain must come from, then asks how much gain is
-left:
+The two noise sources are different. Seed noise is what you get by retraining the same code, and it alone can produce
+gains as large as the ones papers report [[5]](#references)[[6]](#references)[[7]](#references). Sampling noise is what
+you get from which 4,000 spectra happen to be in val [[5]](#references). A real gain has to beat both.
 
-$$
-\Delta_{\text{shuffle}} = \mathrm{MRR}^{c}_{\text{shuffled labels}} - \mathrm{MRR}^{b}_{\text{shuffled labels}}
+**LEAK** and **PRIOR** are canaries. Each removes the thing a real gain must come from, then asks how much gain is left.
+Both run on seed 0:
+
+```math
+\Delta_{\mathrm{shuffle}} = \mathrm{MRR}^{c}_{\text{labels shuffled}} - \mathrm{MRR}^{b}_{\text{labels shuffled}}
 \qquad
-\Delta_{\text{ablate}} = \mathrm{MRR}^{c}_{\text{spectra} = 0} - \mathrm{MRR}^{b}_{\text{spectra} = 0}
-$$
+\Delta_{\mathrm{ablate}} = \mathrm{MRR}^{c}_{\text{spectra zeroed}} - \mathrm{MRR}^{b}_{\text{spectra zeroed}}
+```
 
-$$
-\text{LEAK if } \Delta_{\text{shuffle}} \ge \tfrac{1}{2}\Delta
+```math
+\text{LEAK if } \Delta_{\mathrm{shuffle}} \ge \tfrac{1}{2}\,\Delta
 \qquad
-\text{PRIOR if } \Delta_{\text{ablate}} \ge \tfrac{1}{2}\Delta
-$$
+\text{PRIOR if } \Delta_{\mathrm{ablate}} \ge \tfrac{1}{2}\,\Delta
+```
 
-With shuffled labels nothing can be learned, so any surviving gain was smuggled in. With blank spectra the model can
-only use precursor mass, adduct and candidate structure, so any surviving gain does not come from reading the spectrum.
+With shuffled training labels nothing real can be learned. Networks can still memorize random labels
+[[8]](#references), but that does not transfer to unseen spectra, so any gain left was smuggled in. This is the same
+idea as a label permutation test for a classifier [[9]](#references). With zeroed spectra the model can only use
+precursor mass, adduct and candidate structure. Any gain left is a shortcut that does not read the data
+[[10]](#references).
 
-**OVERFIT** unless the same paired bootstrap on the hidden test fold gives $\mathrm{CI}^{95\%}_{\text{lo}}(\Delta_{\text{test}}) > 0$.
-Proposers never see $\Delta_{\text{test}}$, only the verdict, so they cannot tune against it.
+**OVERFIT** unless the same paired bootstrap on the hidden test fold gives
+$`\mathrm{CI}^{95\%}_{\mathrm{lo}}(\Delta_{\mathrm{test}}) > 0`$. Proposers never see $`\Delta_{\mathrm{test}}`$, only
+the verdict. A holdout that is scored again and again, and fed back, stops being a holdout [[11]](#references)
+[[12]](#references).
+
+**Why these four.** Leakage alone has inflated results in at least 294 papers across 17 fields [[13]](#references)
+[[14]](#references). A study of open source AI scientist systems found data leakage, metric misuse and post hoc
+selection among their main failures, and found them largely invisible in the final papers [[15]](#references). An
+independent test of one such system found 5 of 12 experiments failed on code errors and some that ran reported
+misleading results [[16]](#references). The Referee turns each of these failures into a check that runs before a
+claim is accepted. It follows the falsification view of Popper agents [[19]](#references): a claim must survive
+tests designed to break it, not just look good once.
 
 ---
 
@@ -292,8 +320,8 @@ Judge files by hand and run the sponsor tool checks:
 | `bench/prep.py` | Downloads MassSpecGym, builds train, val and test, candidate fingerprints, reshuffles candidate order |
 | `bench/sandbox.py` | Runs agent code in a Modal Sandbox: no network, no labels, timeouts, label shuffle and spectrum ablation switches |
 | `bench/referee.py` | **The Referee.** Seeds, bootstrap CI, noise band, LEAK and PRIOR canaries, hidden test, promotion |
-| `bench/baseline/model.py` | Baseline: binned spectrum to Morgan fingerprint MLP, cosine ranking |
-| `bench/candidates/honest.py` | Hand written candidate with neutral losses and a sparse first layer |
+| `bench/baseline/model.py` | Baseline: binned spectrum to Morgan fingerprint MLP, cosine ranking, the CSI:FingerID recipe [[17]](#references) |
+| `bench/candidates/honest.py` | Hand written candidate with neutral losses [[18]](#references) and a sparse first layer |
 | `bench/redteam/` | Planted fake gains the Referee must reject |
 | `bench/judge_many.py` | Judge several files against the incumbent in one process |
 | `agents/swarm.py` | Proposers: memory read, hypothesis, Exa search, implement or skip, claim, Referee |
@@ -390,8 +418,36 @@ Exa ablation: [NUMBER] skips before compute with Exa, [NUMBER] without. Promoted
 - **The canaries are necessary, not sufficient.** A leak that survives label shuffling, such as one through candidate
   structure, would pass LEAK. Reshuffling candidates removes the one we know about.
 - **Small real gains get rejected.** A gain smaller than the noise band is called NOISE. We accept that on purpose.
-- **Val is reused across rounds.** The hidden test catches overfitting, but only for claims that reach it.
+  Three seeds give a rough $`\sigma_{\mathrm{seed}}`$; more seeds would tighten it [[5]](#references)[[7]](#references).
+- **Val is reused across rounds.** The hidden test catches overfitting, but only for claims that reach it. Repeated
+  use of the same holdout leaks into model choice [[11]](#references)[[12]](#references).
 - **Compute bound.** A full verdict takes up to 16 sandbox runs for the claim and the incumbent (incumbent runs are
   cached). Val and test are fixed 4,000 spectrum subsets, not the full folds.
 - **GPU access.** Our Modal account could not start A10G functions without a payment method, so runs used 16 CPU
   sandboxes.
+
+---
+
+## References
+
+Found and checked with Exa (`tools/exa_search.py`) on 2026-11-15.
+
+1. Bushuiev et al. [MassSpecGym: A benchmark for the discovery and identification of molecules](https://papers.neurips.cc/paper_files/paper/2024/file/c6c31413d5c53b7d1c343c1498734b0f-Paper-Datasets_and_Benchmarks_Track.pdf). NeurIPS Datasets and Benchmarks, 2024. Retrieval task, at most 256 candidates, hit rate@k, MCES-based split against leakage.
+2. Efron. [Bootstrap methods: another look at the jackknife](https://doi.org/10.1214/aos/1176344552). Annals of Statistics, 1979.
+3. Koehn. [Statistical significance tests for machine translation evaluation](https://aclanthology.org/W04-3250/). EMNLP, 2004. Paired bootstrap resampling over test items.
+4. Dror et al. [The hitchhiker's guide to testing statistical significance in natural language processing](https://doi.org/10.18653/v1/p18-1128). ACL, 2018.
+5. Bouthillier et al. [Accounting for variance in machine learning benchmarks](https://doi.org/10.48550/arxiv.2103.03098). MLSys, 2021. Variance from data sampling and from initialization both change conclusions.
+6. Picard. [torch.manual_seed(3407) is all you need](https://doi.org/10.48550/arxiv.2109.08203). arXiv, 2021.
+7. Henderson et al. [Deep reinforcement learning that matters](https://doi.org/10.1609/aaai.v32i1.11694). AAAI, 2018.
+8. Zhang et al. [Understanding deep learning requires rethinking generalization](https://doi.org/10.48550/arxiv.1611.03530). ICLR, 2017.
+9. Ojala and Garriga. [Permutation tests for studying classifier performance](https://dl.acm.org/doi/10.5555/1756006.1859913). JMLR, 2010.
+10. Geirhos et al. [Shortcut learning in deep neural networks](https://www.nature.com/articles/s42256-020-00257-z). Nature Machine Intelligence, 2020.
+11. Dwork et al. [The reusable holdout: preserving validity in adaptive data analysis](https://www.science.org/doi/10.1126/science.aaa9375). Science, 2015.
+12. Recht et al. [Do ImageNet classifiers generalize to ImageNet?](https://proceedings.mlr.press/v97/recht19a.html). ICML, 2019.
+13. Kapoor and Narayanan. [Leakage and the reproducibility crisis in machine-learning-based science](https://pmc.ncbi.nlm.nih.gov/articles/PMC10499856/). Patterns, 2023.
+14. Kaufman et al. [Leakage in data mining: formulation, detection, and avoidance](https://dl.acm.org/doi/10.1145/2020408.2020496). KDD, 2011.
+15. Luo, Kasirzadeh and Shah. [The more you automate, the less you see: hidden pitfalls of autonomous AI scientists](https://www.pnas.org/doi/10.1073/pnas.2610214123). PNAS, 2026.
+16. Beel et al. [Evaluating Sakana's AI Scientist: bold claims, mixed results, and a promising future?](https://dl.acm.org/doi/10.1145/3769733.3769747). ACM SIGIR Forum, 2025.
+17. Dührkop et al. [Searching molecular structure databases with tandem mass spectra using CSI:FingerID](https://www.pnas.org/doi/full/10.1073/pnas.1509788112). PNAS, 2015. Spectrum to fingerprint, then rank candidates.
+18. Aisporna et al. [Neutral loss mass spectral data enhances molecular similarity analysis in METLIN](https://pmc.ncbi.nlm.nih.gov/articles/PMC10131246/). JASMS, 2022.
+19. Huang et al. [Automated hypothesis validation with agentic sequential falsifications](https://dl.acm.org/doi/10.5555/3780338.3781331). ICML, 2025.
