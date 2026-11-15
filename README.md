@@ -61,35 +61,45 @@ if it is not there. Code: `truth_ranks`, `rr_vec` and `metrics` in `bench/refere
   \dfrac{1}{r_i + 1}, & r_i \ge 0 \\
   0, & r_i = -1
 \end{cases}
-\qquad
+```
+
+```math
 \mathrm{MRR@20} = \frac{1}{N} \sum_{i=1}^{N} \mathrm{RR}_i
-\qquad
+\qquad\qquad
 \mathrm{hit@}k = \frac{1}{N} \sum_{i=1}^{N} \mathbf{1}\left[0 \le r_i < k\right]
 ```
 
 MassSpecGym reports hit@1, hit@5 and hit@20 [[1]](#references). We report those too, but the Referee decides on
 MRR@20. It moves with every change in rank inside the top 20, not only at a cutoff, so smaller real gains show up.
-Ranking at random gives an expected hit@1 of $`\frac{1}{N}\sum_i \frac{1}{n_i} = 0.0377`$ on our val split.
+Ranking at random gives an expected hit@1 of 0.0377 on our val split:
+
+```math
+\mathbb{E}\left[\mathrm{hit@1}\right] = \frac{1}{N} \sum_{i=1}^{N} \frac{1}{n_i} = 0.0377
+```
 
 **Paired gain.** The candidate $`c`$ and the incumbent $`b`$ are trained and scored on the same $`N = 4000`$ val
 spectra with the same seeds $`s \in \{0, 1, 2\}`$. For each spectrum we average the difference over seeds:
 
 ```math
 d_i = \frac{1}{3} \sum_{s=0}^{2} \left( \mathrm{RR}^{c}_{i,s} - \mathrm{RR}^{b}_{i,s} \right)
-\qquad
+\qquad\qquad
 \Delta = \frac{1}{N} \sum_{i=1}^{N} d_i
-\qquad
+```
+
+The gain on a single seed is
+
+```math
 \Delta_s = \mathrm{MRR}^{c}_{s} - \mathrm{MRR}^{b}_{s}
 ```
 
 **NOISE** unless all three hold:
 
 ```math
-\underbrace{\Delta > 2\,\sigma_{\mathrm{seed}}}_{\text{beats retraining noise}}
-\qquad
-\underbrace{\mathrm{CI}^{95\%}_{\mathrm{lo}}(\Delta) > 0}_{\text{beats spectrum sampling noise}}
-\qquad
-\underbrace{\Delta_s > 0 \ \text{ for } s = 0, 1, 2}_{\text{holds on every seed}}
+\begin{aligned}
+&\Delta > 2\,\sigma_{\mathrm{seed}} && \text{beats retraining noise} \\[6pt]
+&\mathrm{CI}^{95\%}_{\mathrm{lo}}(\Delta) > 0 && \text{beats spectrum sampling noise} \\[6pt]
+&\Delta_s > 0 \ \text{ for } s = 0, 1, 2 && \text{holds on every seed}
+\end{aligned}
 ```
 
 Here $`\sigma_{\mathrm{seed}}`$ is the sample standard deviation of the incumbent's $`\mathrm{MRR}^{b}_{s}`$ over the
@@ -105,14 +115,15 @@ you get from which 4,000 spectra happen to be in val [[5]](#references). A real 
 Both run on seed 0:
 
 ```math
-\Delta_{\mathrm{shuffle}} = \mathrm{MRR}^{c}_{\text{labels shuffled}} - \mathrm{MRR}^{b}_{\text{labels shuffled}}
-\qquad
-\Delta_{\mathrm{ablate}} = \mathrm{MRR}^{c}_{\text{spectra zeroed}} - \mathrm{MRR}^{b}_{\text{spectra zeroed}}
+\begin{aligned}
+\Delta_{\mathrm{shuffle}} &= \mathrm{MRR}^{c}_{\text{labels shuffled}} - \mathrm{MRR}^{b}_{\text{labels shuffled}} \\[6pt]
+\Delta_{\mathrm{ablate}} &= \mathrm{MRR}^{c}_{\text{spectra zeroed}} - \mathrm{MRR}^{b}_{\text{spectra zeroed}}
+\end{aligned}
 ```
 
 ```math
 \text{LEAK if } \Delta_{\mathrm{shuffle}} \ge \tfrac{1}{2}\,\Delta
-\qquad
+\qquad\qquad
 \text{PRIOR if } \Delta_{\mathrm{ablate}} \ge \tfrac{1}{2}\,\Delta
 ```
 
@@ -454,3 +465,20 @@ Found and checked with Exa (`tools/exa_search.py`) on 2026-11-15.
 17. Dührkop et al. [Searching molecular structure databases with tandem mass spectra using CSI:FingerID](https://www.pnas.org/doi/full/10.1073/pnas.1509788112). PNAS, 2015. Spectrum to fingerprint, then rank candidates.
 18. Aisporna et al. [Neutral loss mass spectral data enhances molecular similarity analysis in METLIN](https://pmc.ncbi.nlm.nih.gov/articles/PMC10131246/). JASMS, 2022.
 19. Huang et al. [Automated hypothesis validation with agentic sequential falsifications](https://dl.acm.org/doi/10.5555/3780338.3781331). ICML, 2025.
+
+## Verify any verdict yourself
+
+`verify/` is a dependency-free C++17 program that recomputes every Referee verdict from the raw per-spectrum ranks.
+It does not trust our Python. It recomputes MRR@20, the per-seed gains, the incumbent's seed std, the paired bootstrap
+CI, and the canary gains. Then it applies the same rules in the same order (NOISE, LEAK, PRIOR, OVERFIT, PROMOTED).
+
+```sh
+python verify/export.py        # runs/referee_cache.json + runs/events.jsonl -> verify/cases/*.txt
+verify/run_all.sh              # builds with clang++ and checks every case; exit 0 if all match
+verify/verify verify/cases/<exp_id>.txt   # one case, claimed vs recomputed table
+```
+
+All the arithmetic must match to 1e-9. The verifier uses its own RNG (splitmix64) for the bootstrap, so its CI bounds
+differ slightly from numpy's. It accepts them within 15% of the interval width. To test without any Modal runs,
+`.venv/bin/python verify/make_synthetic.py && verify/run_all.sh verify/cases_synthetic` builds three known cases
+(PROMOTED, NOISE, PRIOR) whose claimed numbers come from `bench/referee.py`'s own functions.
