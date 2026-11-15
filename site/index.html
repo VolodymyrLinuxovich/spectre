@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spectre</title>
+<meta name="description" content="An autoresearch swarm that can't fool itself. A Referee that rejects fake gains before they become facts.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --surface-2: #fbfaf7;
+  --ink: #1b1b18; --ink-2: #55544e; --ink-3: #8a8980;
+  --line: #e4e2da; --line-2: #d3d0c5;
+  --ok: #17714a; --ok-bg: #e6f2eb;
+  --bad: #b3261e; --bad-bg: #fbe7e5;
+  --warn: #9a5b00; --warn-bg: #fbf0dc;
+  --accent: #1b1b18; --accent-ink: #ffffff;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(27,27,24,.04), 0 6px 20px rgba(27,27,24,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121211; --surface: #1a1a18; --surface-2: #1f1f1c;
+    --ink: #ecebe6; --ink-2: #b4b2aa; --ink-3: #85837b;
+    --line: #2c2b28; --line-2: #3a3935;
+    --ok: #5cc28f; --ok-bg: #16291f;
+    --bad: #f08a80; --bad-bg: #331a17;
+    --warn: #e0a447; --warn-bg: #2d2412;
+    --accent: #ecebe6; --accent-ink: #121211;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: Geist, system-ui, -apple-system, sans-serif; font-size: 17px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+em { font-family: Newsreader, Georgia, serif; font-style: italic; font-weight: 400; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+
+/* top bar */
+.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 28px; height: 60px; }
+.brand { font-weight: 600; letter-spacing: -.01em; text-decoration: none; display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 22px; height: 22px; }
+.top nav { display: flex; gap: 22px; margin-left: auto; font-size: 15px; color: var(--ink-2); }
+.top nav a { text-decoration: none; }
+.top nav a:hover { color: var(--ink); }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 500; font-size: 15px; border: 1px solid var(--accent); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
+
+/* hero */
+.hero { text-align: center; padding: 96px 0 56px; }
+.hero h1 { font-size: clamp(44px, 7vw, 76px); line-height: 1.02; letter-spacing: -.03em; margin: 0 0 18px; font-weight: 600; }
+.hero p.motto { font-size: clamp(22px, 3vw, 30px); margin: 0 auto 18px; max-width: 760px; letter-spacing: -.01em; }
+.hero p.sub { color: var(--ink-2); max-width: 620px; margin: 0 auto 32px; }
+.hero .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* sections */
+section { padding: 88px 0; border-top: 1px solid var(--line); }
+section h2 { font-size: clamp(30px, 4.2vw, 44px); line-height: 1.1; letter-spacing: -.02em; margin: 0 auto 14px;
+  font-weight: 600; text-align: center; max-width: 820px; }
+section .lead { text-align: center; color: var(--ink-2); max-width: 640px; margin: 0 auto 48px; }
+
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); }
+.card h3 { margin: 0 0 8px; font-size: 18px; letter-spacing: -.01em; }
+.card p { margin: 0; color: var(--ink-2); font-size: 15.5px; }
+.card .big { font-size: 34px; font-weight: 600; letter-spacing: -.02em; margin-bottom: 6px; }
+.quote { max-width: 720px; margin: 40px auto 0; text-align: center; font-size: 22px; line-height: 1.4; }
+.quote cite { display: block; font-style: normal; font-size: 14px; color: var(--ink-3); margin-top: 10px; }
+
+/* referee animation */
+.stage { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: var(--shadow); padding: 28px; overflow: hidden; }
+.lane { display: grid; grid-template-columns: 1.25fr repeat(4, 1fr) 1fr; gap: 12px; align-items: stretch; }
+.gate { border: 1px dashed var(--line-2); border-radius: 10px; padding: 14px 12px; text-align: center; min-height: 250px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; transition: background .3s, border-color .3s; }
+.gate b { font-size: 14.5px; font-weight: 600; }
+.gate span { font-size: 13px; color: var(--ink-3); line-height: 1.35; }
+.gate.pass { border-color: var(--ok); background: var(--ok-bg); }
+.gate.fail { border-color: var(--bad); background: var(--bad-bg); }
+.slot { border-radius: 10px; min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 6px; color: var(--ink-3); font-size: 13px; }
+.slot.inc { border: 1px solid var(--line); background: var(--surface-2); }
+.slot.inc b { color: var(--ink); font-size: 14.5px; }
+.claim { position: absolute; left: 0; top: 0; width: 150px; background: var(--surface); border: 1px solid var(--line-2);
+  border-radius: 10px; padding: 10px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.08); font-size: 13.5px; line-height: 1.35;
+  transition: transform .9s cubic-bezier(.4,.1,.2,1), opacity .5s; will-change: transform, opacity; }
+.claim .who { color: var(--ink-3); font-size: 12px; }
+.claim .gain { font-weight: 600; }
+.stamp { display: inline-block; margin-top: 6px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  opacity: 0; transition: opacity .3s; }
+.stamp.show { opacity: 1; }
+.stamp.bad { background: var(--bad-bg); color: var(--bad); }
+.stamp.ok { background: var(--ok-bg); color: var(--ok); }
+.why { margin-top: 18px; min-height: 48px; text-align: center; color: var(--ink-2); font-size: 15px; }
+.why b { color: var(--ink); }
+.legend { display: flex; gap: 18px; justify-content: center; margin-top: 10px; font-size: 13px; color: var(--ink-3); flex-wrap: wrap; }
+
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+.steps .card h3 { display: flex; align-items: center; gap: 10px; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line-2); font-size: 13px; color: var(--ink-2); }
+
+/* comparison */
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); font-size: 15.5px; }
+th, td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; font-size: 14px; color: var(--ink-2); background: var(--surface-2); }
+tr:last-child td { border-bottom: 0; }
+td.us { color: var(--ink); }
+td.them { color: var(--ink-3); }
+.figs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+.fig .pair { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.fig .pair .vs { color: var(--ink-3); font-size: 14px; }
+.fig .bad { color: var(--bad); }
+.fig .ok { color: var(--ok); }
+.src { font-size: 13px; color: var(--ink-3); margin-top: 8px; }
+
+.tablewrap { overflow-x: auto; border-radius: var(--radius); }
+.cta { text-align: center; }
+footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--ink-3); font-size: 14px; }
+footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+.reveal { opacity: 0; transform: translateY(12px); transition: opacity .6s ease, transform .6s ease; }
+.reveal.in { opacity: 1; transform: none; }
+
+@media (max-width: 820px) {
+  .cards, .steps, .figs { grid-template-columns: 1fr; }
+  .top nav { display: none; }
+  .lane { grid-template-columns: 1fr; }
+  .gate, .slot { min-height: 64px; flex-direction: row; justify-content: space-between; text-align: left; padding: 12px 14px; }
+  .gate span { display: none; }
+  .slot.queue { min-height: 96px; }
+  .gate, .slot { min-height: 110px; align-items: flex-start; }
+  .claim { width: 55%; }
+  .claim { left: auto; }
+  th, td { padding: 12px; font-size: 14.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .claim, .reveal { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 18 L6 18 L8 9 L10 18 L12 18 L14 4 L16 18 L18 18 L19 13 L20 18 L22 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Spectre
+    </a>
+    <nav><a href="#problem">Problem</a><a href="#solution">Solution</a><a href="#better">Why it holds</a></nav>
+    <a class="btn ghost" href="https://github.com/VolodymyrLinuxovich/spectre">GitHub</a>
+  </div>
+</header>
+
+<main>
+  <div class="hero wrap reveal">
+    <h1>Spectre</h1>
+    <p class="motto">An autoresearch swarm that <em>can't fool itself.</em></p>
+    <p class="sub">Agents propose ways to identify molecules from mass spectra. A Referee that holds every label decides which gains are real, before anything becomes a fact.</p>
+    <div class="actions">
+      <a class="btn" href="#solution">See how a claim is judged</a>
+      <a class="btn ghost" href="https://github.com/VolodymyrLinuxovich/spectre">Read the code</a>
+    </div>
+  </div>
+
+  <section id="problem">
+    <div class="wrap">
+      <h2 class="reveal">AI scientists find gains <em>that aren't there.</em></h2>
+      <p class="lead reveal">Give an agent a benchmark and a score to raise, and it will raise it. Most of the time the reason is not the idea it reports.</p>
+      <div class="cards">
+        <div class="card reveal">
+          <div class="big">4,000 of 4,000</div>
+          <h3>The answer is already first</h3>
+          <p>In MassSpecGym's raw candidate lists the true molecule sits at the top for every val spectrum. Return the list as given and hit@1 is 1.00.</p>
+        </div>
+        <div class="card reveal">
+          <div class="big">±0.005</div>
+          <h3>Seeds move the score</h3>
+          <p>Retraining the same baseline on three seeds spreads MRR enough that any gain inside ±0.005 could be luck. One run cannot tell.</p>
+        </div>
+        <div class="card reveal">
+          <div class="big">294 papers</div>
+          <h3>Leaks look like progress</h3>
+          <p>Data leakage has inflated results in at least 294 papers across 17 fields. Autoresearch loops make the same mistakes, only faster.</p>
+        </div>
+      </div>
+      <p class="quote reveal">"These flaws are largely invisible at the level of the final manuscript."
+        <cite>Luo, Kasirzadeh and Shah, <a href="https://www.pnas.org/doi/10.1073/pnas.2610214123">PNAS 2026</a></cite></p>
+    </div>
+  </section>
+
+  <section id="solution">
+    <div class="wrap">
+      <h2 class="reveal">A Referee <em>they can't game.</em></h2>
+      <p class="lead reveal">Proposers never see a label. Every claim has to clear four checks in order. The first one it fails becomes its verdict, with the evidence attached.</p>
+
+      <div class="stage reveal" id="stage" aria-label="Animation of claims passing through the Referee">
+        <div class="lane" id="lane">
+          <div class="slot queue" data-col="0">Claims from the swarm</div>
+          <div class="gate" data-col="1"><b>More than noise?</b><span>3 seeds, bootstrap CI above 0, beats 2× seed spread</span></div>
+          <div class="gate" data-col="2"><b>Learned, not leaked?</b><span>Retrain with shuffled labels. The gain must vanish</span></div>
+          <div class="gate" data-col="3"><b>Reads the spectrum?</b><span>Zero every spectrum. The gain must vanish</span></div>
+          <div class="gate" data-col="4"><b>Holds on hidden test?</b><span>Scored only now, never shown to agents</span></div>
+          <div class="slot inc" data-col="5"><b>Incumbent</b>Promoted code becomes the new baseline</div>
+        </div>
+        <div class="why" id="why">&nbsp;</div>
+      </div>
+      <div class="legend"><span>Example claims. The first verdict and its numbers come from a real Referee run.</span></div>
+
+      <div class="steps">
+        <div class="card reveal"><h3>Search before spending</h3><p>Each proposer checks recent papers with Exa and skips ideas that were already tested.</p></div>
+        <div class="card reveal"><h3>Remember what failed</h3><p>Verdicts go to shared memory on past.dev. Other agents read them and don't repeat them.</p></div>
+        <div class="card reveal"><h3>Run sealed</h3><p>Agent code runs in a Modal sandbox with no network and no labels mounted.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="better">
+    <div class="wrap">
+      <h2 class="reveal">Why its results <em>hold up.</em></h2>
+      <p class="lead reveal">A typical loop trusts one number from one run. Spectre asks where the number came from.</p>
+
+      <div class="figs" id="figs"></div>
+
+      <div class="tablewrap reveal"><table>
+        <thead><tr><th>Check</th><th>Typical autoresearch loop</th><th>Spectre</th></tr></thead>
+        <tbody>
+          <tr><td>Runs per claim</td><td class="them">One seed</td><td class="us">Three seeds, paired on the same 4,000 spectra</td></tr>
+          <tr><td>Uncertainty</td><td class="them">None</td><td class="us">Bootstrap 95% CI over spectra</td></tr>
+          <tr><td>Leaked answers</td><td class="them">Not checked</td><td class="us">Retrain with shuffled labels</td></tr>
+          <tr><td>Ignoring the data</td><td class="them">Not checked</td><td class="us">Zero the spectra at inference</td></tr>
+          <tr><td>Test set</td><td class="them">Seen every round</td><td class="us">Hidden, scored only for claims that pass</td></tr>
+          <tr><td>Past failures</td><td class="them">Lost between runs</td><td class="us">Shared verdicts on past.dev</td></tr>
+          <tr><td>Prior work</td><td class="them">Model memory</td><td class="us">Exa search before any compute</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="wrap reveal">
+      <h2>Read every verdict <em>and its evidence.</em></h2>
+      <p class="lead">Code, Referee, logs and sources are open.</p>
+      <a class="btn" href="https://github.com/VolodymyrLinuxovich/spectre">Open the repository</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Spectre. Built at the SF AI Research Hackathon, November 2026.</span>
+    <span>MassSpecGym · Modal · Exa · past.dev</span>
+  </div>
+</footer>
+
+<script>
+// Figures shown in "Why it holds". Only measured numbers. Add swarm results here when the runs finish.
+const FIGS = [
+  { us: "0.04", them: "1.00", label: "hit@1 from list order alone",
+    note: "Raw candidate lists vs ours, reshuffled per spectrum. Random is 0.038.", src: "runs/prep.log" },
+  { us: "7 / 12", them: "0 / 12", label: "agents get the current verdict",
+    note: "past.dev shared memory vs an embedding store, on a dated log of claims and overturned verdicts.", src: "tools/memory_bench.py" },
+  { us: "0", them: "30", label: "test scores leaked to proposers",
+    note: "Scoped past.dev audiences vs a shared memory file without read scoping, same log and questions.", src: "tools/memory_bench.py" },
+];
+document.getElementById("figs").innerHTML = FIGS.map(f => `
+  <div class="card fig reveal">
+    <div class="pair"><span class="big ok">${f.us}</span><span class="vs">vs</span><span class="big bad" style="font-size:24px">${f.them}</span></div>
+    <h3>${f.label}</h3><p>${f.note}</p><div class="src">${f.src}</div>
+  </div>`).join("");
+
+// Claims for the animation. `stop` is the gate index where it fails (1..4), or 5 for promoted.
+const CLAIMS = [
+  { who: "proposer-2", text: "Natural-product prior on candidates", gain: "claims a gain", stop: 1, verdict: "NOISE",
+    why: "<b>NOISE.</b> MRR fell by 0.024 on every seed. CI [−0.028, −0.021] is below zero." },
+  { who: "proposer-1", text: "Train on val spectra seen in train", gain: "claimed +0.090", stop: 2, verdict: "LEAK",
+    why: "<b>LEAK.</b> Most of the gain survives with labels shuffled. It was not learned." },
+  { who: "proposer-4", text: "Boost candidates by heavy atom count", gain: "claimed +0.018", stop: 3, verdict: "PRIOR",
+    why: "<b>PRIOR.</b> The gain survives with every spectrum zeroed. The model is not reading the data." },
+  { who: "proposer-3", text: "Neutral-loss channel next to peaks", gain: "claimed +0.012", stop: 5, verdict: "PROMOTED",
+    why: "<b>PROMOTED.</b> Beats noise, both canaries vanish, and the gain holds on the hidden test." },
+];
+
+const stage = document.getElementById("stage"), lane = document.getElementById("lane"), whyEl = document.getElementById("why");
+const cols = [...lane.children];
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const sleep = ms => new Promise(r => setTimeout(r, reduce ? Math.min(ms, 200) : ms));
+
+function posOf(col, card) {
+  const s = stage.getBoundingClientRect(), r = cols[col].getBoundingClientRect();
+  const narrow = matchMedia("(max-width: 820px)").matches;
+  if (!narrow) card.style.width = Math.min(170, r.width - 12) + "px"; else card.style.width = "";
+  const x = narrow ? r.left - s.left + r.width - card.offsetWidth - 10 : r.left - s.left + (r.width - card.offsetWidth) / 2;
+  // desktop: sit under the gate's label; phone: sit to the right half of the row
+  const y = narrow ? r.top - s.top + (r.height - card.offsetHeight) / 2
+                   : r.top - s.top + r.height - card.offsetHeight - 10;
+  return [Math.max(8, x), y];
+}
+function place(card, col) { card.dataset.col = col; const [x, y] = posOf(col, card); card.style.transform = `translate(${x}px, ${y}px)`; }
+
+async function runClaim(c) {
+  const el = document.createElement("div");
+  el.className = "claim";
+  el.innerHTML = `<div class="who">${c.who}</div><div>${c.text}</div><div class="gain">${c.gain}</div><span class="stamp"></span>`;
+  el.style.opacity = "0";
+  stage.appendChild(el);
+  place(el, 0);
+  await sleep(50); el.style.opacity = "1";
+  whyEl.innerHTML = `${c.who} claims <b>${c.text.toLowerCase()}</b> improves the model.`;
+  await sleep(1100);
+  const end = Math.min(c.stop, 5);
+  for (let g = 1; g <= end; g++) {
+    place(el, g);
+    await sleep(1000);
+    if (g === c.stop && g <= 4) {
+      cols[g].classList.add("fail");
+      const st = el.querySelector(".stamp"); st.textContent = c.verdict; st.className = "stamp bad show";
+      whyEl.innerHTML = c.why;
+      await sleep(2600);
+      cols[g].classList.remove("fail");
+      el.style.opacity = "0"; await sleep(500); el.remove();
+      return;
+    }
+    if (g <= 4) { cols[g].classList.add("pass"); await sleep(450); cols[g].classList.remove("pass"); }
+  }
+  const st = el.querySelector(".stamp"); st.textContent = c.verdict; st.className = "stamp ok show";
+  cols[5].classList.add("pass");
+  whyEl.innerHTML = c.why;
+  await sleep(2800);
+  cols[5].classList.remove("pass");
+  el.style.opacity = "0"; await sleep(500); el.remove();
+}
+
+let running = false;
+async function loop() {
+  if (running) return; running = true;
+  while (true) { for (const c of CLAIMS) await runClaim(c); await sleep(600); }
+}
+new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { loop(); o.disconnect(); } }, { threshold: .3 }).observe(stage);
+addEventListener("resize", () => stage.querySelectorAll(".claim").forEach(el => {
+  el.style.transition = "none"; place(el, +el.dataset.col || 0);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.style.transition = ""));
+}));
+
+// reveal on scroll
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .12 });
+document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+</script>
+</body>
+</html>
