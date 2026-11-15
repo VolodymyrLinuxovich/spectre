@@ -27,6 +27,7 @@ SF AI Research Hackathon, November 14 and 15, 2026. Sponsor challenges entered: 
 | **The task** | [MassSpecGym](https://huggingface.co/datasets/roman-bushuiev/MassSpecGym) retrieval. Given an MS/MS spectrum, rank up to 256 candidate molecules with the same formula. We use the official MCES-disjoint train, val and test folds [[1]](#references). The Referee decides on MRR@20; we also report hit@1, hit@5, hit@20 |
 | **The trap** | In the raw candidate lists the true molecule is first for **4,000 of 4,000** val spectra and 4,000 of 4,000 test spectra. An agent that "discovers" this gets a perfect score |
 | **Try it** | `python3 ui/server.py`, then open http://localhost:8765 to watch the swarm. `SPECTRE_SAMPLE=1` shows sample data |
+| **Experiment log** | [docs/logbook.pdf](docs/logbook.pdf), a dated lab notebook of every run with its source log |
 
 ---
 

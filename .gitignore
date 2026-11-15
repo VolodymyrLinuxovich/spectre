@@ -5,3 +5,4 @@ __pycache__/
 *.parquet
 PITCH.md
 tools/SPONSORS.md
+PLAN.md
