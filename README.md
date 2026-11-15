@@ -205,7 +205,7 @@ sequenceDiagram
     P->>P: implement or skip, cite sources by number
     P->>M: claim, with citations
     P->>R: judge(model.py)
-    R->>S: 3 seeds, plus label shuffle and spectrum ablation
+    R->>S: 3 seeds, plus spectrum ablation and label shuffle
     S-->>R: ranked candidates on val
     R->>R: noise band and CI, PRIOR, LEAK
     R->>S: 3 seeds on hidden test, only if all passed
@@ -367,8 +367,8 @@ Judge files by hand and run the sponsor tool checks:
 | Path | What |
 |------|------|
 | `bench/prep.py` | Downloads MassSpecGym, builds train, val and test, candidate fingerprints, reshuffles candidate order |
-| `bench/sandbox.py` | Runs agent code in a Modal Sandbox: no network, no labels, timeouts, label shuffle and spectrum ablation switches |
-| `bench/referee.py` | **The Referee.** Seeds, bootstrap CI, noise band, LEAK and PRIOR canaries, hidden test, promotion |
+| `bench/sandbox.py` | Runs agent code in a Modal Sandbox: no network, no labels, timeouts, spectrum ablation and label shuffle switches |
+| `bench/referee.py` | **The Referee.** Seeds, bootstrap CI, noise band, PRIOR and LEAK canaries, hidden test, promotion |
 | `bench/baseline/model.py` | Baseline: binned spectrum to Morgan fingerprint MLP, cosine ranking, the CSI:FingerID recipe [[17]](#references) |
 | `bench/candidates/honest.py` | Hand written candidate with neutral losses [[18]](#references) and a sparse first layer |
 | `bench/redteam/` | Planted fake gains the Referee must reject |

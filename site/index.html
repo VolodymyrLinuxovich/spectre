@@ -251,8 +251,8 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
         <div class="lane" id="lane">
           <div class="slot queue" data-col="0">Claims from the swarm</div>
           <div class="gate" data-col="1"><b>More than noise?</b><span>3 seeds, bootstrap CI above 0, beats 2× seed spread</span></div>
-          <div class="gate" data-col="2"><b>Learned, not leaked?</b><span>Retrain with shuffled labels. The gain must vanish</span></div>
-          <div class="gate" data-col="3"><b>Reads the spectrum?</b><span>Zero every spectrum. The gain must vanish</span></div>
+          <div class="gate" data-col="2"><b>Reads the spectrum?</b><span>Zero every spectrum. The gain must vanish</span></div>
+          <div class="gate" data-col="3"><b>Learned, not leaked?</b><span>Retrain with shuffled labels. The gain must vanish</span></div>
           <div class="gate" data-col="4"><b>Holds on hidden test?</b><span>Scored only now, never shown to agents</span></div>
           <div class="slot inc" data-col="5"><b>Incumbent</b>Promoted code becomes the new baseline</div>
         </div>
@@ -320,10 +320,10 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
 const CLAIMS = [
   { who: "planted test", text: "Natural-product prior on candidates", gain: "claims a gain", stop: 1, verdict: "NOISE",
     why: "<b>NOISE.</b> MRR fell by 0.024 on every seed. CI [−0.028, −0.021] is below zero." },
-  { who: "proposer-1", text: "Train on val spectra seen in train", gain: "claimed +0.090", stop: 2, verdict: "LEAK",
-    why: "<b>LEAK.</b> Most of the gain survives with labels shuffled. It was not learned." },
-  { who: "proposer-4", text: "Boost candidates by heavy atom count", gain: "claimed +0.018", stop: 3, verdict: "PRIOR",
+  { who: "proposer-4", text: "Boost candidates by heavy atom count", gain: "claimed +0.018", stop: 2, verdict: "PRIOR",
     why: "<b>PRIOR.</b> The gain survives with every spectrum zeroed. The model is not reading the data." },
+  { who: "proposer-1", text: "Train on val spectra seen in train", gain: "claimed +0.090", stop: 3, verdict: "LEAK",
+    why: "<b>LEAK.</b> Most of the gain survives with labels shuffled. It was not learned." },
   { who: "honest.py", text: "Neutral-loss channel next to peaks", gain: "claims +0.0103", stop: 5, verdict: "PROMOTED",
     why: "<b>PROMOTED.</b> +0.0103 MRR on val, positive on all 3 seeds. Only 15% survives zeroed spectra and 32% shuffled labels. Hidden test: +0.0136, CI [+0.0078, +0.0194]." },
 ];
