@@ -41,8 +41,8 @@ A proposer's claim is worth nothing until the Referee promotes it.
   1. **CRASH.** Every sandbox run must finish.
   2. **NOISE.** The gain over the incumbent is measured on 3 seeds. It must beat twice the incumbent's seed spread,
      its bootstrap 95% CI must stay above zero, and it must be positive on every seed.
-  3. **LEAK.** Retrain with the training labels shuffled. If half the gain survives, it was not learned.
-  4. **PRIOR.** Blank every spectrum at inference. If half the gain survives, the model is not reading the spectrum.
+  3. **PRIOR.** Blank every spectrum at inference. If half the gain survives, the model is not reading the spectrum.
+  4. **LEAK.** Retrain with the training labels shuffled. If half the gain survives, it was not learned.
   5. **OVERFIT.** Only now is the hidden test fold scored, again on 3 seeds. Its CI must stay above zero.
 - **Only PROMOTED code becomes the new incumbent**, so the system improves from its own verified results.
 - **Proposers see verdicts, never test numbers.** `Referee.public_view` strips them, and past.dev keeps test scores in
@@ -115,23 +115,24 @@ The two noise sources are different. Seed noise is what you get by retraining th
 gains as large as the ones papers report [[5]](#references)[[6]](#references)[[7]](#references). Sampling noise is what
 you get from which 4,000 spectra happen to be in val [[5]](#references). A real gain has to beat both.
 
-**LEAK** and **PRIOR** are canaries. Each removes the thing a real gain must come from, then asks how much gain is left.
+**PRIOR** and **LEAK** are canaries. Each removes the thing a real gain must come from, then asks how much gain is left.
 Both run on seed 0:
 
 ```math
 \begin{aligned}
-\Delta_{\mathrm{shuffle}} &= \mathrm{MRR}^{c}_{\text{labels shuffled}} - \mathrm{MRR}^{b}_{\text{labels shuffled}} \\[6pt]
-\Delta_{\mathrm{ablate}} &= \mathrm{MRR}^{c}_{\text{spectra zeroed}} - \mathrm{MRR}^{b}_{\text{spectra zeroed}}
+\Delta_{\mathrm{ablate}} &= \mathrm{MRR}^{c}_{\text{spectra zeroed}} - \mathrm{MRR}^{b}_{\text{spectra zeroed}} \\[6pt]
+\Delta_{\mathrm{shuffle}} &= \mathrm{MRR}^{c}_{\text{labels shuffled}} - \mathrm{MRR}^{b}_{\text{labels shuffled}}
 \end{aligned}
 ```
 
 A real gain should mostly disappear under both canaries. If at least half of it survives, the Referee stops
-there and names the cause.
+there and names the cause. PRIOR is checked first, so any gain that survives zeroed spectra is called PRIOR, whether
+it was learned from training labels or not.
 
 ```math
-\text{LEAK if } \Delta_{\mathrm{shuffle}} \ge \tfrac{1}{2}\,\Delta
-\qquad\qquad
 \text{PRIOR if } \Delta_{\mathrm{ablate}} \ge \tfrac{1}{2}\,\Delta
+\qquad\qquad
+\text{LEAK if } \Delta_{\mathrm{shuffle}} \ge \tfrac{1}{2}\,\Delta
 ```
 
 With shuffled training labels nothing real can be learned. Networks can still memorize random labels
@@ -205,7 +206,7 @@ sequenceDiagram
     P->>R: judge(model.py)
     R->>S: 3 seeds, plus label shuffle and spectrum ablation
     S-->>R: ranked candidates on val
-    R->>R: noise band and CI, LEAK, PRIOR
+    R->>R: noise band and CI, PRIOR, LEAK
     R->>S: 3 seeds on hidden test, only if all passed
     R-->>M: verdict for everyone, test score for referee only
     R-->>P: verdict without test numbers
@@ -272,11 +273,16 @@ These are single seed numbers. The Referee decides whether any of them is a real
 `bench/redteam/` holds two fakes built from the baseline. `noise.py` only changes the hidden width, so any gain is seed
 noise. `prior.py` boosts candidates that look like training molecules without reading the spectrum.
 
-| Fake | Expected verdict | Referee verdict |
-|------|------------------|-----------------|
-| `noise.py` | NOISE | [VERDICT] |
-| `prior.py` | PRIOR | [VERDICT] |
-| `honest.py` | PROMOTED | [VERDICT] |
+| File | Expected verdict | Referee verdict | Val gain in MRR@20 (95% CI) | Per seed gain |
+|------|------------------|-----------------|------------------------------|---------------|
+| `noise.py` | NOISE | **NOISE** | +0.0000 (−0.0027, +0.0029) | −0.0011, −0.0031, +0.0042 |
+| `prior.py` | PRIOR | **NOISE** | −0.0243 (−0.0282, −0.0206) | −0.0241, −0.0275, −0.0214 |
+| `honest.py` | PROMOTED | [VERDICT] | | |
+
+The noise band was ±0.0048 for both. `noise.py` was caught as intended. `prior.py` was rejected one check
+earlier than we planned: the prior made the model worse on every seed, so the Referee never reached the PRIOR
+canary. That rejection is correct, but it means this run does not test the PRIOR check. Source:
+`runs/events.jsonl`, tag `seeded`.
 
 ### Swarm
 
@@ -436,8 +442,9 @@ Exa ablation: [NUMBER] skips before compute with Exa, [NUMBER] without. Promoted
 
 - **One benchmark.** Everything is measured on MassSpecGym retrieval. The Referee is benchmark agnostic in design but
   has only been run here.
-- **The canaries are necessary, not sufficient.** A leak that survives label shuffling, such as one through candidate
-  structure, would pass LEAK. Reshuffling candidates removes the one we know about.
+- **The canaries are necessary, not sufficient.** A shortcut through candidate structure survives label shuffling,
+  but it also survives zeroed spectra, so PRIOR catches it first. A leak that needs the spectrum and survives label
+  shuffling would pass both. Reshuffling candidates removes the one leak we know about.
 - **Small real gains get rejected.** A gain smaller than the noise band is called NOISE. We accept that on purpose.
   Three seeds give a rough $`\sigma_{\mathrm{seed}}`$; more seeds would tighten it [[5]](#references)[[7]](#references).
 - **Val is reused across rounds.** The hidden test catches overfitting, but only for claims that reach it. Repeated
@@ -477,7 +484,7 @@ Found and checked with Exa (`tools/exa_search.py`) on 2026-11-15.
 
 `verify/` is a dependency-free C++17 program that recomputes every Referee verdict from the raw per-spectrum ranks.
 It does not trust our Python. It recomputes MRR@20, the per-seed gains, the incumbent's seed std, the paired bootstrap
-CI, and the canary gains. Then it applies the same rules in the same order (NOISE, LEAK, PRIOR, OVERFIT, PROMOTED).
+CI, and the canary gains. Then it applies the same rules in the same order (NOISE, PRIOR, LEAK, OVERFIT, PROMOTED).
 
 ```sh
 python verify/export.py        # runs/referee_cache.json + runs/events.jsonl -> verify/cases/*.txt
