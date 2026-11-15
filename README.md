@@ -284,6 +284,16 @@ earlier than we planned: the prior made the model worse on every seed, so the Re
 canary. That rejection is correct, but it means this run does not test the PRIOR check. Source:
 `runs/events.jsonl`, tag `seeded`.
 
+**The prior trap does not work on this benchmark.** We swept 36 non-spectral priors on top of the baseline, seed 0
+val, A10G (`bench/redteam/prior_sweep.py`). Six kinds, six weights each:
+similarity to the mean training fingerprint, the same restricted to training molecules with the query's formula,
+max Tanimoto to those molecules, a Naive Bayes "library molecule versus candidate pool" score per fingerprint bit,
+the same conditioned on element set and adduct, and how often a candidate appears across all candidate lists.
+None raised val MRR@20 by more than 0.0013, a third of the noise band. Most lowered it, by up to 0.055.
+MassSpecGym's MCES-disjoint split keeps val molecules structurally far from training molecules, so a prior that
+pulls candidates toward training chemistry has nothing to exploit. Raw numbers are in `runs/prior_sweep_round1.log`
+and `runs/prior_sweep.log`.
+
 ### Swarm
 
 | Run | Command | Claims | Promoted | Accepted claim precision |

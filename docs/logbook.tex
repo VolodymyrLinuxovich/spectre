@@ -159,7 +159,9 @@ The Referee trains each submission in a network isolated GPU sandbox, three seed
 The \emph{ablate} canary zeroes every intensity at inference. The \emph{shuffle} canary permutes structures across
 training spectra before training. A claim is promoted only if its paired MRR@20 gain has a bootstrap 95\%
 CI~\cite{koehn} above zero, exceeds twice the incumbent's seed to seed standard deviation, is positive on every seed,
-keeps less than half of itself under each canary, and holds on the hidden test fold.
+keeps less than half of itself under each canary, and holds on the hidden test fold. The ablate canary is checked
+first (PRIOR), then the shuffle canary (LEAK), so any gain that survives zeroed spectra is called PRIOR whether or not
+it was learned.
 
 \begin{table}[h]
 \centering
@@ -207,8 +209,8 @@ the evidence so far the gain comes from reading the spectrum. Seed 1 and the hid
 
 \textbf{Prior trap.} \texttt{bench/redteam/prior.py} adds the cosine to the mean training fingerprint to every
 candidate score with weight 1.0. It was planted to produce a fake gain that survives zeroed spectra. At this weight it
-\emph{lowers} MRR@20 by 0.021 to 0.024 on both seeds, so the Referee will reject it as noise rather than as a prior. To
-demonstrate the PRIOR verdict the trap needs a weight that actually raises val MRR@20.
+\emph{lowers} MRR@20 by 0.021 to 0.024 on both seeds, so the Referee will reject it as noise rather than as a prior.
+Entry E5 looks for any weight or prior that raises val MRR@20.
 
 \textbf{GPU versus CPU.} The same seed 0 code gives hit@1 0.1013 on GPU and 0.1003 on CPU for the baseline, and 0.1128
 versus 0.1145 for the neutral loss model. Small differences between devices are
@@ -216,10 +218,57 @@ expected, so every comparison in Table~\ref{tab:referee} uses GPU runs only.
 
 \src{runs/referee\_cache.json, runs/seeded.log, bench/referee.py}
 
+\entry{E5. Can a structural prior beat the baseline?}{07:44 PT}
+
+\textbf{Question.} A common way to get a gain without reading the spectrum is a prior over candidate structure.
+We searched for any non-spectral prior that raises val MRR@20 on this benchmark, to give the Referee a real PRIOR case.
+
+\textbf{Method.} Baseline trained once on seed 0 (A10G), once normally and once with training structures permuted
+exactly as the Referee's shuffle canary does. Candidates rescored as
+$s = \cos(\hat{y}, c) + w\,\pi(c)$, for six priors $\pi$ and six weights $w$ each, under the plain, ablate and shuffle
+modes. The Naive Bayes and frequency priors are $z$-scored within each candidate list. The six priors:
+\begin{enumerate}
+  \item cosine to the mean fingerprint of all training molecules;
+  \item cosine to the mean fingerprint of training molecules with the query's formula;
+  \item max Tanimoto to training molecules with the query's formula;
+  \item Naive Bayes log odds per bit, training molecules versus the unlabeled candidate pool;
+  \item the same, fitted separately per element set and adduct (at least 50 molecules, else item 4);
+  \item log frequency of the candidate across all val candidate lists.
+\end{enumerate}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+Prior & Best $\Delta$MRR@20 (weight) & Worst $\Delta$MRR@20 (weight) \\
+\midrule
+Global mean fingerprint & $-0.0004$ (0.02) & $-0.0248$ (1.0) \\
+Same formula, mean fingerprint & $+0.0001$ (0.02) & $-0.0071$ (1.0) \\
+Same formula, max Tanimoto & $0.0000$ (0.02) & $-0.0074$ (1.0) \\
+Naive Bayes, library versus pool & $+0.0013$ (0.01) & $-0.0547$ (0.2) \\
+Naive Bayes, per element set and adduct & $+0.0012$ (0.005) & $-0.0547$ (0.2) \\
+Candidate list frequency & $-0.0126$ (0.005) & $-0.0210$ (0.2) \\
+\bottomrule
+\end{tabular}
+\caption{Change in val MRR@20 over the baseline (0.1648), seed 0, plain mode. The noise band is $\pm 0.0048$.}
+\end{table}
+
+\textbf{Result.} No prior raises MRR@20 by more than 0.0013, under a third of the noise band, and most lower it.
+With zeroed spectra none helps by more than 0.0012 either. The Naive Bayes priors do help when the model is trained on shuffled labels
+(up to $+0.013$), which shows they carry some signal, but whatever the trained model already reads from the spectrum
+subsumes it.
+
+\textbf{Interpretation.} MassSpecGym splits folds so that val molecules are far in MCES distance from every training
+molecule~\cite{msg}. A prior that pulls candidates toward training chemistry therefore points away from the answer.
+On this benchmark the split itself defends against the prior shortcut, and the PRIOR canary has nothing to catch among
+the priors we tried. The candidate order leak in E1 is the shortcut that does exist, and the shuffle removes it.
+
+\src{runs/prior\_sweep\_round1.log, runs/prior\_sweep.log, bench/redteam/prior\_sweep.py}
+
 \section*{Open items}
 \begin{itemize}
   \item Finish seed 1 of the neutral loss model and score the hidden test fold.
-  \item Retune the prior trap weight so it yields a real val gain, then confirm the PRIOR verdict.
   \item Score \texttt{noise.py} seed 0 (plain) to complete its verdict.
   \item Log swarm claims and verdicts here as they arrive.
 \end{itemize}
