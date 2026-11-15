@@ -225,6 +225,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
           <div class="slot inc" data-col="5"><b>Incumbent</b>Promoted code becomes the new baseline</div>
         </div>
         <div class="why" id="why">&nbsp;</div>
+        <p class="why" style="opacity:.7;font-size:.85em;margin-top:.5em">Illustration of how each gate works. Only the first claim is a real run. Real verdicts are in the repo and the live dashboard.</p>
       </div>
       <div class="legend"><span>Example claims. The first verdict and its numbers come from a real Referee run.</span></div>
 
@@ -285,14 +286,14 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
 <script>
 // Claims for the animation. `stop` is the gate index where it fails (1..4), or 5 for promoted.
 const CLAIMS = [
-  { who: "proposer-2", text: "Natural-product prior on candidates", gain: "claims a gain", stop: 1, verdict: "NOISE",
+  { who: "planted test", text: "Natural-product prior on candidates", gain: "claims a gain", stop: 1, verdict: "NOISE",
     why: "<b>NOISE.</b> MRR fell by 0.024 on every seed. CI [−0.028, −0.021] is below zero." },
   { who: "proposer-4", text: "Boost candidates by heavy atom count", gain: "claimed +0.018", stop: 2, verdict: "PRIOR",
     why: "<b>PRIOR.</b> The gain survives with every spectrum zeroed. The model is not reading the data." },
   { who: "proposer-1", text: "Train on val spectra seen in train", gain: "claimed +0.090", stop: 3, verdict: "LEAK",
     why: "<b>LEAK.</b> Most of the gain survives with labels shuffled. It was not learned." },
   { who: "proposer-3", text: "Neutral-loss channel next to peaks", gain: "claimed +0.012", stop: 5, verdict: "PROMOTED",
-    why: "<b>PROMOTED.</b> Beats noise, both canaries vanish, and the gain holds on the hidden test." },
+    why: "<b>PROMOTED.</b> Beats noise, both canaries vanish, and then the gain must also hold on the hidden test." },
 ];
 
 const stage = document.getElementById("stage"), lane = document.getElementById("lane"), whyEl = document.getElementById("why");

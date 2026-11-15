@@ -50,12 +50,38 @@ _lock = threading.Lock()
 _sb_app = None
 
 
+# Cross-process GPU slots. The workspace has a concurrent-GPU cap: GPU sandboxes past it sit
+# queued for 10+ min, while CPU sandboxes start in ~1s. Every process on this machine
+# (swarm, referee, sweeps) shares these lock files, so at most SPECTRE_GPU_SLOTS GPU
+# sandboxes run at once. A run that can't get a slot within SPECTRE_GPU_WAIT seconds goes to CPU.
+SLOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runs", "gpu_slots")
+
+
+def _acquire_gpu_slot():
+    import fcntl
+    n = int(os.environ.get("SPECTRE_GPU_SLOTS", "10"))
+    wait = float(os.environ.get("SPECTRE_GPU_WAIT", "60"))
+    os.makedirs(SLOT_DIR, exist_ok=True)
+    deadline = time.time() + wait
+    while True:
+        for i in range(n):
+            f = open(os.path.join(SLOT_DIR, f"slot{i}.lock"), "w")
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return f
+            except OSError:
+                f.close()
+        if time.time() >= deadline:
+            return None
+        time.sleep(2)
+
+
 def _get_app():
     """Look the App up once; run_candidate is called from many threads."""
     global _sb_app
     with _lock:
         if _sb_app is None:
-            _sb_app = _get_app()
+            _sb_app = modal.App.lookup(APP_NAME, create_if_missing=True)
         return _sb_app
 ALLOWED = ["train.parquet", "val_inputs.parquet", "test_inputs.parquet",
            "cands/val.parquet", "cands/test.parquet"]
@@ -86,6 +112,7 @@ try:
 except Exception:
     pass
 
+_tl = time.time()
 D = "/data"
 train_df = pd.read_parquet(f"{D}/train.parquet")
 inputs_df = pd.read_parquet(f"{D}/{split}_inputs.parquet")
@@ -99,6 +126,7 @@ if shuffle:  # label-shuffle canary: break spectrum <-> structure link
 if ablate:   # spectrum-ablation canary: model sees no peak information
     inputs_df["intensities"] = [np.zeros(len(x), dtype=float).tolist() for x in inputs_df["intensities"]]
 
+load_s = time.time() - _tl
 sys.path.insert(0, "/work")
 import model
 
@@ -124,7 +152,7 @@ for i in inputs_df["id"]:
 
 os.makedirs("/work/out", exist_ok=True)
 with open("/work/out/preds.json", "w") as f:
-    json.dump({"preds": out, "n_missing": bad, "train_s": round(t1 - t0, 2), "rank_s": round(t2 - t1, 2)}, f)
+    json.dump({"preds": out, "n_missing": bad, "train_s": round(t1 - t0, 2), "rank_s": round(t2 - t1, 2), "load_s": round(load_s, 2)}, f)
 print(f"HARNESS_OK n={len(out)} missing={bad} train_s={t1-t0:.1f} rank_s={t2-t1:.1f}")
 '''
 
@@ -168,9 +196,12 @@ def run_candidate(
     assert split in ("val", "test"), split
     if gpu == "env":
         gpu = _default_gpu()
+    slot = _acquire_gpu_slot() if gpu else None
+    if gpu and slot is None:
+        gpu = None  # all GPU slots busy: CPU sandbox starts now instead of queueing
     if timeout_s is None:
         timeout_s = TIMEOUT_S if gpu else CPU_TIMEOUT_S
-    res_kw = {} if gpu else {"cpu": 16.0, "memory": 32 * 1024}
+    res_kw = {"cpu": 8.0, "memory": 32 * 1024} if gpu else {"cpu": 16.0, "memory": 32 * 1024}
     t0 = time.time()
     res = {"ok": False, "preds": None, "returncode": None, "stdout_tail": "",
            "stderr_tail": "", "error": None, "seed": seed, "split": split, "gpu": gpu or "none",
@@ -189,7 +220,9 @@ def run_candidate(
             volumes={"/data": modal.Volume.from_name(INPUTS_VOL).read_only()},
             tags={"project": "spectre", "split": split, "seed": str(seed)},
         )
-        sb.filesystem.make_directory("/work")
+        res["t_create_s"] = round(time.time() - t0, 1)
+        sb.filesystem.make_directory("/work")  # blocks until the container is scheduled
+        res["t_ready_s"] = round(time.time() - t0, 1)
         sb.filesystem.write_text(model_py_source, "/work/model.py")
         sb.filesystem.write_text(HARNESS, "/work/harness.py")
         p = sb.exec("python", "/work/harness.py", str(seed), split, str(topk),
@@ -197,6 +230,7 @@ def run_candidate(
                     timeout=timeout_s, workdir="/work")
         out, err = p.stdout.read(), p.stderr.read()
         rc = p.wait()
+        res["t_exec_s"] = round(time.time() - t0 - res["t_ready_s"], 1)
         res.update(returncode=rc, stdout_tail=_tail(out), stderr_tail=_tail(err))
         if rc == 0 and "HARNESS_OK" in out:
             payload = json.loads(sb.filesystem.read_text("/work/out/preds.json"))
@@ -211,6 +245,8 @@ def run_candidate(
                 sb.terminate()
             except Exception:
                 pass
+        if slot is not None:
+            slot.close()  # releases the flock
     res["wall_s"] = round(time.time() - t0, 1)
     return res
 

@@ -5,11 +5,11 @@ A claim is PROMOTED only if it survives, in order:
   2. NOISE   paired gain over the incumbent on val (MRR@20, seed-averaged) must have a
              bootstrap 95% CI above zero, beat 2x the incumbent's seed-to-seed std,
              and be positive on every seed.
-  3. LEAK    retrain with shuffled train labels. Anything that still beats the
-             incumbent's shuffled score by >= half the claimed gain did not come from
-             learning (answer smuggled through inputs or candidate structure).
-  4. PRIOR   zero the spectra at inference. If >= half the gain survives, the model is
+  3. PRIOR   zero the spectra at inference. If >= half the gain survives, the model is
              not reading the spectrum (precursor mass / formula / candidate priors).
+  4. LEAK    retrain with shuffled train labels. Anything that still beats the
+             incumbent's shuffled score by >= half the claimed gain did not come from
+             learning (answer smuggled through inputs).
   5. OVERFIT hidden test fold, 3 seeds. Proposers never see test numbers, only the verdict.
 Promoted code becomes the new incumbent, so the system improves from its own results.
 """
@@ -27,7 +27,7 @@ import modal
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNS = ROOT / "runs"
+RUNS = Path(os.environ["SPECTRE_RUNS"]) if os.environ.get("SPECTRE_RUNS") else ROOT / "runs"
 RUNS.mkdir(exist_ok=True)
 CACHE = RUNS / "referee_cache.json"
 INCUMBENT = RUNS / "incumbent.py"
@@ -73,7 +73,7 @@ def truth_ranks(preds: dict, split: str) -> list[int]:
 def log(_who: str, _kind: str, **payload):
     if "agent" in payload:
         payload["proposer"] = payload.pop("agent")
-    with open(EVENTS, "a") as f:
+    with _EVENT_LOCK, open(EVENTS, "a") as f:
         f.write(json.dumps({"ts": time.time(), "agent": _who, "kind": _kind, **payload}, default=str) + "\n")
 
 
@@ -83,14 +83,14 @@ def sha(src: str) -> str:
 
 def metrics(ranks) -> dict:
     r = np.asarray(ranks)
-    rr = np.where(r >= 0, 1.0 / (r + 1), 0.0)
+    rr = np.where(r >= 0, 1.0 / (np.maximum(r, 0) + 1), 0.0)
     return {"mrr": float(rr.mean()), "hit1": float((r == 0).mean()),
             "hit5": float(((r >= 0) & (r < 5)).mean()), "hit20": float((r >= 0).mean())}
 
 
 def rr_vec(ranks) -> np.ndarray:
     r = np.asarray(ranks)
-    return np.where(r >= 0, 1.0 / (r + 1), 0.0)
+    return np.where(r >= 0, 1.0 / (np.maximum(r, 0) + 1), 0.0)
 
 
 def boot_ci(diff: np.ndarray, n=2000, seed=0) -> tuple[float, float]:
@@ -100,11 +100,21 @@ def boot_ci(diff: np.ndarray, n=2000, seed=0) -> tuple[float, float]:
     return float(np.percentile(m, 2.5)), float(np.percentile(m, 97.5))
 
 
+import threading as _threading
+_SHARED_CACHE = None
+_CACHE_LOCK = _threading.Lock()
+_EVENT_LOCK = _threading.Lock()
+
+
 class Referee:
-    def __init__(self):
-        import threading
-        self._lock = threading.Lock()
-        self.cache = json.loads(CACHE.read_text()) if CACHE.exists() else {}
+    def __init__(self, track: str = "main"):
+        # each run (swarm, naive, single...) improves its own incumbent from the same baseline
+        self.inc_path = INCUMBENT if track == "main" else RUNS / f"incumbent_{track}.py"
+        self._lock = _CACHE_LOCK
+        global _SHARED_CACHE
+        if _SHARED_CACHE is None:
+            _SHARED_CACHE = json.loads(CACHE.read_text()) if CACHE.exists() else {}
+        self.cache = _SHARED_CACHE
         self._ranks = modal.Function.from_name("spectre-referee", "truth_ranks")
         from bench.sandbox import run_candidate
         self._run = run_candidate
@@ -123,6 +133,7 @@ class Referee:
         key = f"{sha(src)}:{split}:{seed}:{mode}"
         if key in self.cache:
             return self.cache[key]
+        print(f"[referee] start {key}", flush=True)
         res = self._run(src, seed=seed, split=split, topk=TOPK,
                         ablate_spectra=mode == "ablate", shuffle_labels=mode == "shuffle")
         if not res.get("ok"):
@@ -132,6 +143,8 @@ class Referee:
             ranks = self._ranks.remote(res["preds"], split)
             out = {"ok": True, "ranks": ranks, "wall_s": res.get("wall_s"),
                    "train_s": res.get("train_s")}
+        print(f"[referee] done  {key} ok={out['ok']} wall={res.get('wall_s')} "
+              f"{'' if out['ok'] else out.get('error')}", flush=True)
         self.cache[key] = out
         self._save()
         return out
@@ -141,9 +154,9 @@ class Referee:
             return list(ex.map(lambda j: self.run(*j), jobs))
 
     def incumbent(self) -> str:
-        if not INCUMBENT.exists():
-            INCUMBENT.write_text((ROOT / "bench/baseline/model.py").read_text())
-        return INCUMBENT.read_text()
+        if not self.inc_path.exists():
+            self.inc_path.write_text((ROOT / "bench/baseline/model.py").read_text())
+        return self.inc_path.read_text()
 
     def judge(self, src: str, claim: str = "", agent: str = "?", guarded: bool = True,
               exp_id: str = "", tag: str = "") -> dict:
@@ -185,24 +198,31 @@ class Referee:
                  noise_band=2 * seed_std)
         if lo <= 0 or gain <= 2 * seed_std or min(per_seed) <= 0:
             why = []
-            if lo <= 0: why.append(f"95% CI [{lo:+.4f}, {hi:+.4f}] includes 0")
-            if gain <= 2 * seed_std: why.append(f"gain {gain:+.4f} inside noise band ±{2*seed_std:.4f}")
-            if min(per_seed) <= 0: why.append(f"not positive on every seed {[round(x,4) for x in per_seed]}")
+            if hi < 0:
+                why.append(f"worse than the incumbent: 95% CI [{lo:+.4f}, {hi:+.4f}] is entirely below 0")
+            else:
+                if lo <= 0:
+                    why.append(f"95% CI [{lo:+.4f}, {hi:+.4f}] includes 0")
+                if gain <= 2 * seed_std:
+                    why.append(f"gain {gain:+.4f} is below the noise band (2 sigma = {2*seed_std:.4f})")
+                if min(per_seed) <= 0:
+                    why.append(f"not positive on every seed {[round(x, 4) for x in per_seed]}")
             v.update(verdict="NOISE", evidence="; ".join(why))
             return self._done(v, t0)
 
         sh = metrics(res[(True, 0, "shuffle")]["ranks"])["mrr"] - metrics(res[(False, 0, "shuffle")]["ranks"])["mrr"]
         ab = metrics(res[(True, 0, "ablate")]["ranks"])["mrr"] - metrics(res[(False, 0, "ablate")]["ranks"])["mrr"]
         v.update(shuffle_gain=sh, ablate_gain=ab)
-        if sh >= 0.5 * gain:
-            v.update(verdict="LEAK", evidence=f"{sh/gain:.0%} of the gain survives with train labels shuffled: "
-                                              "it is not learned from data")
-            return self._done(v, t0)
+        # PRIOR first: gain that survives blank spectra is non-spectral (learned or not).
         if ab >= 0.5 * gain:
             v.update(verdict="PRIOR", evidence=f"{ab/gain:.0%} of the gain survives with spectra zeroed: "
                                                "the model is not reading the spectrum")
             return self._done(v, t0)
 
+        if sh >= 0.5 * gain:
+            v.update(verdict="LEAK", evidence=f"{sh/gain:.0%} of the gain survives with train labels shuffled: "
+                                              "it is not learned from data")
+            return self._done(v, t0)
         tj = [(s, "test", sd, "plain") for s in (src, inc) for sd in SEEDS]
         tr = self.batch(tj)
         if not all(r["ok"] for r in tr):
@@ -219,7 +239,7 @@ class Referee:
         else:
             v.update(verdict="PROMOTED", evidence=f"val {gain:+.4f}, hidden test {tg:+.4f} CI [{tlo:+.4f}, {thi:+.4f}]")
             (RUNS / f"incumbent_{sha(inc)}.py").write_text(inc)
-            INCUMBENT.write_text(src)
+            self.inc_path.write_text(src)
         return self._done(v, t0)
 
     def _done(self, v, t0):

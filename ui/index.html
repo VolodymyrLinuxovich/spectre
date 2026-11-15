@@ -581,8 +581,11 @@ async function poll() {
   if (inflight) return;
   inflight = true;
   try {
-    const r = await fetch(`/events?since=${state.since}`, { cache: "no-store" });
+    // Static (Vercel) build reads a published snapshot; local server streams live events.
+    const url = window.SPECTRE_STATIC ? "events.json" : `/events?since=${state.since}`;
+    const r = await fetch(url, { cache: "no-store" });
     const j = await r.json();
+    if (window.SPECTRE_STATIC) j.events = (j.events || []).filter(e => (+e.ts || 0) > state.since);
     state.source = j.source; state.sample = j.sample; state.lastOk = Date.now();
     if (j.events && j.events.length) {
       state.events.push(...j.events);

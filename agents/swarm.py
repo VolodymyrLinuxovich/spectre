@@ -53,18 +53,51 @@ RULES = """Hard rules for model.py (the sandbox enforces them; violating them wa
 
 
 class LLM:
-    def __init__(self):
-        url = os.getenv("SPECTRE_LLM_URL")
-        if url:
-            self.client = OpenAI(base_url=url, api_key=os.getenv("SPECTRE_LLM_API_KEY", "x"))
-            self.model = os.getenv("SPECTRE_LLM_MODEL")
-            self.provider = "modal"
+    """One chat interface over three providers, so each proposer can run a different model.
+
+    model name decides the route:
+      claude-*   Anthropic API (Opus 5.5 / Sonnet 5.5), streamed, adaptive thinking
+      gpt-*      OpenAI API
+      qwen / modal / anything else  open-weight model on our Modal endpoint (OpenAI-compatible)
+    """
+
+    def __init__(self, model: str | None = None):
+        self.model = model or os.getenv("SPECTRE_DEFAULT_MODEL", "gpt-5.5")
+        if self.model.startswith("claude"):
+            import anthropic
+            self.provider, self.client = "anthropic", anthropic.Anthropic()
+        elif self.model.startswith("gpt") or not os.getenv("SPECTRE_LLM_URL"):
+            self.provider, self.client = "openai", OpenAI()
+            if not self.model.startswith("gpt"):
+                self.model = "gpt-5.5"  # Modal endpoint not up: fall back, and say so in the log
         else:
-            self.client = OpenAI()
-            self.model = os.getenv("SPECTRE_FALLBACK_MODEL", "gpt-5.5")
-            self.provider = "openai"
+            self.provider = "modal"
+            self.client = OpenAI(base_url=os.getenv("SPECTRE_LLM_URL"), timeout=300, max_retries=1,
+                                 api_key=os.getenv("SPECTRE_LLM_API_KEY", "x"))
+            self.model = os.getenv("SPECTRE_LLM_MODEL")
 
     def chat(self, system: str, user: str, max_tokens: int = 12000) -> str:
+        if self.provider == "modal":
+            try:
+                return self._chat(system, user, max_tokens)
+            except Exception as e:
+                # endpoint cold or down: answer with GPT-5.5 this time, and record that it happened
+                log("orchestrator", "llm_fallback", model=self.model, error=repr(e)[:200])
+                return LLM("gpt-5.5").chat(system, user, max_tokens)
+        return self._chat(system, user, max_tokens)
+
+    def _chat(self, system: str, user: str, max_tokens: int) -> str:
+        if self.provider == "anthropic":
+            # streaming avoids HTTP timeouts on long code generations
+            with self.client.messages.stream(
+                model=self.model, max_tokens=max(max_tokens * 2, 16000), system=system,
+                thinking={"type": "adaptive"}, output_config={"effort": "high"},
+                messages=[{"role": "user", "content": user}],
+            ) as stream:
+                msg = stream.get_final_message()
+            if msg.stop_reason == "refusal":
+                raise RuntimeError("model refused")
+            return "".join(b.text for b in msg.content if b.type == "text").strip()
         lim = {"max_completion_tokens": max_tokens * 2} if self.provider == "openai" else {"max_tokens": max_tokens}
         r = self.client.chat.completions.create(
             model=self.model, **lim,
@@ -92,13 +125,13 @@ def extract_code(t: str) -> str | None:
 
 
 class Proposer:
-    def __init__(self, i: int, args, llm: LLM, ref: Referee, mem, budget: "Budget"):
+    def __init__(self, i: int, args, llm: "LLM", ref: Referee, mem, budget: "Budget"):
         self.i, self.name, self.args = i, f"proposer-{i}", args
         self.focus = FOCUS[(i - 1) % len(FOCUS)]
         self.llm, self.ref, self.mem, self.budget = llm, ref, mem, budget
 
     def ev(self, kind, **kw):
-        log(self.name, kind, tag=self.args.tag, **kw)
+        log(self.name, kind, tag=self.args.tag, model=self.llm.model, **kw)
 
     def step(self):
         inc = self.ref.incumbent()
@@ -195,7 +228,7 @@ If implement, then the full new model.py.""")
                 v = self.ref.judge(code, claim=h["hypothesis"], agent=self.name, guarded=not self.args.naive,
                                exp_id=exp_id, tag=self.args.tag)
         pub = Referee.public_view(v)
-        (ROOT / "runs" / "code").mkdir(exist_ok=True)
+        (ROOT / "runs" / "code").mkdir(parents=True, exist_ok=True)
         (ROOT / "runs" / "code" / f"{exp_id}.py").write_text(code)
         if self.mem is not None:
             self.mem.record({"exp_id": exp_id, "kind": "verdict", "idea": h["hypothesis"],
@@ -220,7 +253,7 @@ class Budget:
             return True
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--proposers", type=int, default=4)
     ap.add_argument("--rounds", type=int, default=3)
@@ -229,15 +262,19 @@ def main():
     ap.add_argument("--no-exa", action="store_true")
     ap.add_argument("--memory", default="pastdev", choices=["pastdev", "local", "none"])
     ap.add_argument("--tag", default="swarm")
-    args = ap.parse_args()
+    ap.add_argument("--models", default="", help="comma list, one per proposer (cycled), e.g. "
+                    "claude-opus-5-5,gpt-5.5,qwen,claude-sonnet-5-5")
+    args = ap.parse_args(argv)
 
-    llm, ref = LLM(), Referee()
+    models = [m.strip() for m in args.models.split(",") if m.strip()] or [None]
+    ref = Referee(track=args.tag)
     mem = None if args.memory == "none" else get_memory(args.memory)
     if mem is not None:
         mem.setup(args.proposers)
     budget = Budget(args.budget or args.proposers * args.rounds * 2)
-    log("orchestrator", "start", tag=args.tag, llm=llm.provider, model=llm.model, **vars(args))
-    ps = [Proposer(i + 1, args, llm, ref, mem, budget) for i in range(args.proposers)]
+    ps = [Proposer(i + 1, args, LLM(models[i % len(models)]), ref, mem, budget)
+          for i in range(args.proposers)]
+    log("orchestrator", "start", roster={p.name: p.llm.model for p in ps}, **vars(args))
 
     def loop(p):
         for _ in range(args.rounds):
