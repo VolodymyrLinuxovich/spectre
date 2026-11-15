@@ -102,13 +102,21 @@ def boot_ci(diff: np.ndarray, n=2000, seed=0) -> tuple[float, float]:
 
 class Referee:
     def __init__(self):
+        import threading
+        self._lock = threading.Lock()
         self.cache = json.loads(CACHE.read_text()) if CACHE.exists() else {}
         self._ranks = modal.Function.from_name("spectre-referee", "truth_ranks")
         from bench.sandbox import run_candidate
         self._run = run_candidate
 
     def _save(self):
-        CACHE.write_text(json.dumps(self.cache))
+        import threading
+        if not hasattr(self, "_lock"):
+            self._lock = threading.Lock()
+        with self._lock:
+            tmp = CACHE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(dict(self.cache)))
+            tmp.replace(CACHE)
 
     def run(self, src: str, split: str, seed: int, mode: str = "plain") -> dict:
         """mode: plain | ablate | shuffle. Cached by (code hash, split, seed, mode)."""

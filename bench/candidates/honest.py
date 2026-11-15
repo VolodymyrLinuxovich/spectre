@@ -4,12 +4,18 @@ Changes vs bench/baseline/model.py (same interface, same inputs, same ranking ru
   1. Neutral-loss channel. For every peak, (precursor_mz - mz) is binned at 0.1 Da (0..NL_MAX) and
      weighted by the same sqrt intensity as the peak. Neutral losses (H2O, CO2, NH3, sugars ...) are
      the classic structure signal that m/z bins alone only capture indirectly.
-  2. Cosine term in the loss. Candidates are ranked by cosine(pred, fp), so we train on
-     BCE + COS_W * (1 - cosine(sigmoid(logits), fp)) instead of BCE alone.
-  3. Sparse first layer (EmbeddingBag over peak bins with intensity weights). Mathematically the
+  2. Sparse first layer (EmbeddingBag over peak bins with intensity weights). Mathematically the
      same as the baseline's Linear over a dense binned vector, just ~50x cheaper, which pays for (1).
+(Optional cosine loss term, COS_W, is off by default: it did not help hit@1 in the seed-0 sweep.)
 Every spectrum-derived input is multiplied by peak intensity, so zeroed spectra remove all of it.
 No candidate priors: ranking is cosine to the predicted fingerprint only.
+
+Seed-0 val sweep (4000 spectra, 16-core CPU), hit@1 / hit@5 / hit@20, train time:
+  baseline model.py                 0.1003 / 0.2298 / 0.4195  576s
+  sparse layer only                 0.1070 / 0.2295 / 0.4250  520s
+  sparse + cosine loss              0.1078 / 0.2295 / 0.4300  389s
+  sparse + neutral loss (DEFAULT)   0.1145 / 0.2378 / 0.4285  456s
+  sparse + neutral loss + cosine    0.1130 / 0.2425 / 0.4278  684s
 """
 import time
 
@@ -31,7 +37,7 @@ EPOCHS = 25
 BATCH = 512
 LR = 1e-3
 DROPOUT = 0.3
-COS_W = 1.0
+COS_W = 0.0  # cosine term tested: +0 hit@1, +0.5pt hit@5, 1.5x slower -> off
 
 
 def _device():
