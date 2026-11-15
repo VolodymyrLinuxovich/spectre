@@ -2,7 +2,7 @@
 
 # Spectre
 
-**AI agents run the experiments. Spectre tells you which gains are real.** Proposer agents try to improve a model that identifies molecules
+**AI research agents report gains that aren't real. Spectre catches them before anyone trusts them.** Proposer agents try to improve a model that identifies molecules
 from mass spectra. **Exa** finds prior work, **past.dev** holds what the swarm already tried, and a **Referee** decides
 what is real. The one rule: **a claim becomes a fact only when the Referee promotes it**, and the Referee is the only
 process that ever sees labels.
