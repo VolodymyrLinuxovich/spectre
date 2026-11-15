@@ -278,12 +278,23 @@ noise. `prior.py` boosts candidates that look like training molecules without re
 |------|------------------|-----------------|------------------------------|---------------|
 | `noise.py` | NOISE | **NOISE** | +0.0000 (−0.0027, +0.0029) | −0.0011, −0.0031, +0.0042 |
 | `prior.py` | PRIOR | **NOISE** | −0.0243 (−0.0282, −0.0206) | −0.0241, −0.0275, −0.0214 |
-| `honest.py` | PROMOTED | [VERDICT] | | |
+| `honest.py` | PROMOTED | **PROMOTED** | +0.0103 (+0.0043, +0.0161) | +0.0083, +0.0088, +0.0137 |
 
 The noise band was ±0.0048 for both. `noise.py` was caught as intended. `prior.py` was rejected one check
 earlier than we planned: the prior made the model worse on every seed, so the Referee never reached the PRIOR
 canary. That rejection is correct, but it means this run does not test the PRIOR check. Source:
 `runs/events.jsonl`, tag `seeded`.
+
+`honest.py` passed every check. Its canaries kept little of the gain: 32% survived shuffled labels and 15% survived
+zeroed spectra, both under the 50% limit. On the hidden test fold the gain was +0.0136 MRR@20 with a 95% CI of
+(+0.0078, +0.0194). It is the first promoted candidate and became the new incumbent.
+
+| Seed 0 | MRR@20 | hit@1 | hit@5 | hit@20 |
+|---|---|---|---|---|
+| Baseline, val | 0.1648 | 0.1013 | 0.2298 | 0.4220 |
+| `honest.py`, val | 0.1731 | 0.1128 | 0.2323 | 0.4348 |
+| Baseline, hidden test | 0.1598 | 0.0990 | 0.2288 | 0.4180 |
+| `honest.py`, hidden test | 0.1750 | 0.1098 | 0.2478 | 0.4508 |
 
 **The prior trap does not work on this benchmark.** We swept 36 non-spectral priors on top of the baseline, seed 0
 val, A10G (`bench/redteam/prior_sweep.py`). Six kinds, six weights each:
@@ -462,8 +473,16 @@ Exa ablation: [NUMBER] skips before compute with Exa, [NUMBER] without. Promoted
   use of the same holdout leaks into model choice [[11]](#references)[[12]](#references).
 - **Compute bound.** A full verdict takes up to 16 sandbox runs for the claim and the incumbent (incumbent runs are
   cached). Val and test are fixed 4,000 spectrum subsets, not the full folds.
-- **GPU access.** Our Modal account could not start A10G functions without a payment method, so runs used 16 CPU
-  sandboxes.
+- **Mixed hardware.** Early baseline sweeps ran on 16 CPU sandboxes, before GPU functions were enabled on our Modal
+  account. The cloud runs use Modal GPUs. The Referee caches runs by code, split, seed and mode, not by
+  hardware, so a cached incumbent run and a new claim run can come from different machine types. Floating point
+  results can differ slightly between CPU and GPU.
+- **Runs were restarted.** The cloud runs (tags `swarm`, `naive`, `single`) were restarted at 08:25 PT after Modal ran
+  out of GPU capacity. Before the fix, those infrastructure failures were logged as CRASH. The Referee now retries
+  them and labels them INFRA, never CRASH, so they do not count against a proposer.
+- **One INFRA verdict is ours.** `honest_v2` (a +0.039 val claim, best of 8 configs) is being judged again. One INFRA
+  event in its log came from us shutting down sandboxes during the restart, not from its code.
+- **Proposer models.** gpt-5.5 and Qwen3-Coder-30B served on Modal with vLLM. Results may differ with other models.
 
 ---
 
