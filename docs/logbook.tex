@@ -153,7 +153,7 @@ Sparse, neutral losses, cosine loss & 0.1130 & \textbf{0.2425} & 0.4278 & 684 \\
 \end{itemize}
 \src{runs/honest\_sweep.log, bench/candidates/honest.py}
 
-\entry{E4. Referee runs on GPU (partial)}{07:26 PT}
+\entry{E4. Referee verdicts for the baseline, the traps and honest.py}{07:26 PT, verdicts 08:25 PT}
 
 The Referee trains each submission in a network isolated GPU sandbox, three seeds on val, then two canaries on seed 0.
 The \emph{ablate} canary zeroes every intensity at inference. The \emph{shuffle} canary permutes structures across
@@ -204,12 +204,19 @@ Seed 2 & $+0.0137$ & $[+0.0071,\ +0.0208]$ \\
 \end{tabular}
 \end{center}
 Both gains exceed the noise band. Under the ablate canary the gain falls to $+0.0015$, about 14\% of the seed 0
-and 2 mean of $+0.0110$. Under the shuffle canary it is $+0.0033$, about 30\%. Both are below the 50\% threshold, so on
-the evidence so far the gain comes from reading the spectrum. Seed 1 and the hidden test fold are still pending.
+and 2 mean of $+0.0110$. Under the shuffle canary it is $+0.0033$, about 30\%. Both are below the 50\% threshold.
+
+\textbf{Verdict: PROMOTED.} With all three seeds the paired val gain is $+0.0103$ MRR@20 (bootstrap 95\% CI
+$[+0.0043,\ +0.0161]$), positive on every seed ($+0.0083$, $+0.0088$, $+0.0137$), against a noise band of
+$\pm 0.0048$. The canaries keep 15\% (zeroed spectra) and 32\% (shuffled labels) of it. On the hidden test fold,
+scored only after both canaries passed, the gain is $+0.0136$ (CI $[+0.0078,\ +0.0194]$). On seed 0 the test MRR@20 is 0.1750 versus
+0.1598 and hit@1 is 0.1098 versus 0.0990. \texttt{honest.py} is the first promoted model and became the incumbent.
 
 \textbf{Prior trap.} \texttt{bench/redteam/prior.py} adds the cosine to the mean training fingerprint to every
 candidate score with weight 1.0. It was planted to produce a fake gain that survives zeroed spectra. At this weight it
-\emph{lowers} MRR@20 by 0.021 to 0.024 on both seeds, so the Referee will reject it as noise rather than as a prior.
+\emph{lowers} MRR@20 on every seed ($-0.0241$, $-0.0275$, $-0.0214$), and the Referee returned NOISE with CI
+$[-0.0282,\ -0.0206]$. The cosmetic width change in \texttt{noise.py} also returned NOISE: $+0.0000$, CI
+$[-0.0027,\ +0.0029]$.
 Entry E5 looks for any weight or prior that raises val MRR@20.
 
 \textbf{GPU versus CPU.} The same seed 0 code gives hit@1 0.1013 on GPU and 0.1003 on CPU for the baseline, and 0.1128
@@ -266,10 +273,47 @@ the priors we tried. The candidate order leak in E1 is the shortcut that does ex
 
 \src{runs/prior\_sweep\_round1.log, runs/prior\_sweep.log, bench/redteam/prior\_sweep.py}
 
+\entry{E6. Scaling the neutral loss model on GPU}{08:25 PT}
+
+\textbf{Question.} With GPU training at about a minute, does more capacity on top of \texttt{honest.py} give a larger
+real gain?
+
+\textbf{Method.} Eight configurations of \texttt{bench/candidates/honest\_v2.py}, seed 0, A10G, each scored on val and
+on val with spectra zeroed. Same inputs, same ranking rule, no priors.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lcccr}
+\toprule
+Configuration & MRR@20 & hit@1 & Zeroed MRR@20 & Train (s) \\
+\midrule
+Baseline (Referee, seed 0) & 0.1648 & 0.1013 & 0.1044 & 59 \\
+Hidden 1024 (= \texttt{honest.py}) & 0.1731 & 0.1128 & 0.1059 & 69 \\
+Hidden 2048 & 0.1869 & 0.1250 & 0.1052 & 126 \\
+Hidden 2048, 40 epochs & 0.1807 & 0.1178 & 0.1076 & 191 \\
+Hidden 2048, 3 layers, dropout 0.4 & 0.1754 & 0.1145 & 0.1045 & 143 \\
+Hidden 1024, ensemble of 3 & 0.1775 & 0.1153 & 0.1001 & 180 \\
+Hidden 2048, ensemble of 3 & 0.1885 & 0.1253 & 0.1092 & 351 \\
+Hidden 2048, 40 epochs, dropout 0.4 & 0.1749 & 0.1135 & 0.1091 & 220 \\
+\textbf{Hidden 4096, dropout 0.5} & \textbf{0.2034} & \textbf{0.1425} & 0.1154 & 401 \\
+\bottomrule
+\end{tabular}
+\caption{Seed 0 val. The \texttt{honest.py} row reproduces its Referee score exactly.}
+\end{table}
+
+\textbf{Observations.} Width helps most: going from 1024 to 4096 hidden units with stronger dropout adds $+0.030$
+MRR@20. More epochs and a third layer hurt. Ensembles add little for their cost. The 4096 model's gain over the
+baseline is $+0.039$, and $+0.011$ of it survives zeroed spectra (28\%), more than for \texttt{honest.py} but under half.
+
+\textbf{Caveat.} The configuration was chosen as the best of eight on val seed 0, so its val number is optimistic by
+construction. The Referee's three seeds, its canaries and above all the hidden test are the real check of that
+selection. Its first Referee run ended as INFRA (sandboxes terminated during a restart) and is being judged again.
+
+\src{runs/honest\_v2\_sweep.log, bench/candidates/honest\_v2.py}
+
 \section*{Open items}
 \begin{itemize}
-  \item Finish seed 1 of the neutral loss model and score the hidden test fold.
-  \item Score \texttt{noise.py} seed 0 (plain) to complete its verdict.
+  \item Referee verdict for \texttt{honest\_v2.py} (E6).
   \item Log swarm claims and verdicts here as they arrive.
 \end{itemize}
 
