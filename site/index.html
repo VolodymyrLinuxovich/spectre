@@ -257,9 +257,9 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
           <div class="slot inc" data-col="5"><b>Incumbent</b>Promoted code becomes the new baseline</div>
         </div>
         <div class="why" id="why">&nbsp;</div>
-        <p class="why" style="opacity:.7;font-size:.85em;margin-top:.5em">Illustration of how each gate works. Only the first claim is a real run. Real verdicts are in the repo and the live dashboard.</p>
+        <p class="why" style="opacity:.7;font-size:.85em;margin-top:.5em">The first and last claims are real Referee runs with their real numbers. The middle two illustrate the PRIOR and LEAK gates.</p>
       </div>
-      <div class="legend"><span>Example claims. The first verdict and its numbers come from a real Referee run.</span></div>
+      <div class="legend"><span>Real verdicts and their evidence are in the repo and the live dashboard.</span></div>
 
       <div class="steps">
         <div class="card reveal"><h3>Search before spending</h3><p>Each proposer checks recent papers with Exa and skips ideas that were already tested.</p></div>
@@ -324,8 +324,8 @@ const CLAIMS = [
     why: "<b>PRIOR.</b> The gain survives with every spectrum zeroed. The model is not reading the data." },
   { who: "proposer-1", text: "Train on val spectra seen in train", gain: "claimed +0.090", stop: 3, verdict: "LEAK",
     why: "<b>LEAK.</b> Most of the gain survives with labels shuffled. It was not learned." },
-  { who: "proposer-3", text: "Neutral-loss channel next to peaks", gain: "claimed +0.012", stop: 5, verdict: "PROMOTED",
-    why: "<b>PROMOTED.</b> Beats noise, both canaries vanish, and then the gain must also hold on the hidden test." },
+  { who: "honest.py", text: "Neutral-loss channel next to peaks", gain: "claims +0.0103", stop: 5, verdict: "PROMOTED",
+    why: "<b>PROMOTED.</b> +0.0103 MRR on val, positive on all 3 seeds. Only 15% survives zeroed spectra and 32% shuffled labels. Hidden test: +0.0136, CI [+0.0078, +0.0194]." },
 ];
 
 const stage = document.getElementById("stage"), lane = document.getElementById("lane"), whyEl = document.getElementById("why");
