@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
 <style>
 :root {
+  color-scheme: light;
   --bg: #f6f5f1; --surface: #ffffff; --surface-2: #fbfaf7;
   --ink: #1b1b18; --ink-2: #55544e; --ink-3: #8a8980;
   --line: #e4e2da; --line-2: #d3d0c5;
@@ -20,18 +21,7 @@
   --radius: 12px;
   --shadow: 0 1px 2px rgba(27,27,24,.04), 0 6px 20px rgba(27,27,24,.06);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121211; --surface: #1a1a18; --surface-2: #1f1f1c;
-    --ink: #ecebe6; --ink-2: #b4b2aa; --ink-3: #85837b;
-    --line: #2c2b28; --line-2: #3a3935;
-    --ok: #5cc28f; --ok-bg: #16291f;
-    --bad: #f08a80; --bad-bg: #331a17;
-    --warn: #e0a447; --warn-bg: #2d2412;
-    --accent: #ecebe6; --accent-ink: #121211;
-    --shadow: none;
-  }
-}
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
@@ -56,12 +46,7 @@ em { font-family: Newsreader, Georgia, serif; font-style: italic; font-weight: 4
   background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 500; font-size: 15px; border: 1px solid var(--accent); }
 .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
 
-/* hero */
-.hero { text-align: center; padding: 96px 0 56px; }
-.hero h1 { font-size: clamp(44px, 7vw, 76px); line-height: 1.02; letter-spacing: -.03em; margin: 0 0 18px; font-weight: 600; }
-.hero p.motto { font-size: clamp(22px, 3vw, 30px); margin: 0 auto 18px; max-width: 760px; letter-spacing: -.01em; }
-.hero p.sub { color: var(--ink-2); max-width: 620px; margin: 0 auto 32px; }
-.hero .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+/* old hero */
 
 /* sections */
 section { padding: 88px 0; border-top: 1px solid var(--line); }
@@ -129,6 +114,35 @@ td.them { color: var(--ink-3); }
 footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--ink-3); font-size: 14px; }
 footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
+/* hero with spectrum */
+.hero { position: relative; overflow: hidden; padding: 0; text-align: left; min-height: min(78vh, 720px); display: flex; align-items: center; }
+.hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hero-in { position: relative; padding-top: 80px; padding-bottom: 80px; }
+.hero h1 { font-size: clamp(56px, 9vw, 112px); line-height: .95; letter-spacing: -.04em; margin: 0 0 24px; font-weight: 600; }
+.hero .motto { font-size: clamp(22px, 2.8vw, 32px); line-height: 1.25; max-width: 680px; margin: 0 0 32px; letter-spacing: -.015em; }
+#problem h2, #better h2 { margin-bottom: 44px; }
+.stats .big { font-size: 40px; }
+.stats p { font-size: 16.5px; }
+/* without / with */
+.vs { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.vs-head, .vs-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 20px; padding: 18px 24px; align-items: start; }
+.vs-head { font-size: 14px; color: var(--ink-3); border-bottom: 1px solid var(--line); padding-top: 14px; padding-bottom: 14px; }
+.vs-row + .vs-row { border-top: 1px solid var(--line); }
+.vs-row .q { color: var(--ink-2); font-size: 16px; }
+.vs-row .n { font-size: 26px; font-weight: 600; letter-spacing: -.02em; color: var(--ink-3); line-height: 1.15; }
+.vs-row .n.us { color: var(--ink); }
+.vs-row .n small { display: block; font-size: 13.5px; font-weight: 400; letter-spacing: 0; color: var(--ink-3); margin-top: 4px; }
+.src code { font-size: 12.5px; }
+@media (max-width: 820px) {
+  .hero { min-height: min(70vh, 600px); }
+  .vs-head { display: none; }
+  .vs-row { grid-template-columns: 1fr 1fr; }
+  .vs-row .q { grid-column: 1 / -1; }
+  .vs-row .n::before { display: block; font-size: 12px; font-weight: 500; color: var(--ink-3); margin-bottom: 2px; }
+  .vs-row .n:not(.us)::before { content: "Without"; }
+  .vs-row .n.us::before { content: "With Spectre"; }
+}
+
 .reveal { opacity: 0; transform: translateY(12px); transition: opacity .6s ease, transform .6s ease; }
 .reveal.in { opacity: 1; transform: none; }
 
@@ -157,42 +171,28 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 18 L6 18 L8 9 L10 18 L12 18 L14 4 L16 18 L18 18 L19 13 L20 18 L22 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Spectre
     </a>
-    <nav><a href="#problem">Problem</a><a href="#solution">Solution</a><a href="#better">Why it holds</a></nav>
+    <nav><a href="#problem">Problem</a><a href="#solution">Solution</a><a href="#better">Results</a></nav>
     <a class="btn ghost" href="https://github.com/VolodymyrLinuxovich/spectre">GitHub</a>
   </div>
 </header>
 
 <main>
-  <div class="hero wrap reveal">
-    <h1>Spectre</h1>
-    <p class="motto">AI research agents report gains that aren't real. <em>Spectre catches them before anyone trusts them.</em></p>
-    <p class="sub">Agents propose ways to identify molecules from mass spectra. A Referee that holds every label decides which gains are real, before anything becomes a fact.</p>
-    <div class="actions">
+  <div class="hero">
+    <canvas id="spec" aria-hidden="true"></canvas>
+    <div class="wrap hero-in reveal">
+      <h1>Spectre</h1>
+      <p class="motto">AI research agents report gains that aren't real. <em>Spectre catches them before anyone trusts them.</em></p>
       <a class="btn" href="#solution">See how a claim is judged</a>
-      <a class="btn ghost" href="https://github.com/VolodymyrLinuxovich/spectre">Read the code</a>
     </div>
   </div>
 
   <section id="problem">
     <div class="wrap">
       <h2 class="reveal">AI scientists find gains <em>that aren't there.</em></h2>
-      <p class="lead reveal">Give an agent a benchmark and a score to raise, and it will raise it. Most of the time the reason is not the idea it reports.</p>
-      <div class="cards">
-        <div class="card reveal">
-          <div class="big">4,000 of 4,000</div>
-          <h3>The answer is already first</h3>
-          <p>In MassSpecGym's raw candidate lists the true molecule sits at the top for every val spectrum. Return the list as given and hit@1 is 1.00.</p>
-        </div>
-        <div class="card reveal">
-          <div class="big">±0.005</div>
-          <h3>Seeds move the score</h3>
-          <p>Retraining the same baseline on three seeds spreads MRR enough that any gain inside ±0.005 could be luck. One run cannot tell.</p>
-        </div>
-        <div class="card reveal">
-          <div class="big">294 papers</div>
-          <h3>Leaks look like progress</h3>
-          <p>Data leakage has inflated results in at least 294 papers across 17 fields. Autoresearch loops make the same mistakes, only faster.</p>
-        </div>
+      <div class="cards stats">
+        <div class="card reveal"><div class="big">4,000 / 4,000</div><p>spectra where MassSpecGym lists the right answer first. An agent that notices scores a perfect 1.00.</p></div>
+        <div class="card reveal"><div class="big">±0.005</div><p>MRR swing from the random seed alone. One run can't tell luck from progress.</p></div>
+        <div class="card reveal"><div class="big">294 papers</div><p>with results inflated by data leakage, across 17 fields.</p></div>
       </div>
       <p class="quote reveal">"These flaws are largely invisible at the level of the final manuscript."
         <cite>Luo, Kasirzadeh and Shah, <a href="https://www.pnas.org/doi/10.1073/pnas.2610214123">PNAS 2026</a></cite></p>
@@ -227,23 +227,31 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
 
   <section id="better">
     <div class="wrap">
-      <h2 class="reveal">Why its results <em>hold up.</em></h2>
-      <p class="lead reveal">A typical loop trusts one number from one run. Spectre asks where the number came from.</p>
-
-      <div class="figs" id="figs"></div>
-
-      <div class="tablewrap reveal"><table>
-        <thead><tr><th>Check</th><th>Typical autoresearch loop</th><th>Spectre</th></tr></thead>
-        <tbody>
-          <tr><td>Runs per claim</td><td class="them">One seed</td><td class="us">Three seeds, paired on the same 4,000 spectra</td></tr>
-          <tr><td>Uncertainty</td><td class="them">None</td><td class="us">Bootstrap 95% CI over spectra</td></tr>
-          <tr><td>Leaked answers</td><td class="them">Not checked</td><td class="us">Retrain with shuffled labels</td></tr>
-          <tr><td>Ignoring the data</td><td class="them">Not checked</td><td class="us">Zero the spectra at inference</td></tr>
-          <tr><td>Test set</td><td class="them">Seen every round</td><td class="us">Hidden, scored only for claims that pass</td></tr>
-          <tr><td>Past failures</td><td class="them">Lost between runs</td><td class="us">Shared verdicts on past.dev</td></tr>
-          <tr><td>Prior work</td><td class="them">Model memory</td><td class="us">Exa search before any compute</td></tr>
-        </tbody>
-      </table></div>
+      <h2 class="reveal">What changes <em>with Spectre.</em></h2>
+      <div class="vs reveal">
+        <div class="vs-head"><span></span><span>Without Spectre</span><span>With Spectre</span></div>
+        <div class="vs-row">
+          <span class="q">Score an agent gets by reading list order instead of the spectrum</span>
+          <span class="n">1.00<small>hit@1, looks perfect</small></span>
+          <span class="n us">0.04<small>chance level, nothing to exploit</small></span>
+        </div>
+        <div class="vs-row">
+          <span class="q">Times an agent sees the latest verdict on an idea it wants to retry</span>
+          <span class="n">0 of 12<small>embedding memory returns the old claim</small></span>
+          <span class="n us">7 of 12<small>shared memory on past.dev</small></span>
+        </div>
+        <div class="vs-row">
+          <span class="q">Hidden test scores that leak to the agents proposing changes</span>
+          <span class="n">30<small>one shared notes file</small></span>
+          <span class="n us">0<small>scoped memory, test kept by the Referee</small></span>
+        </div>
+        <div class="vs-row">
+          <span class="q">What it takes for a claimed gain to count</span>
+          <span class="n">One good run</span>
+          <span class="n us">3 seeds, two canaries, hidden test</span>
+        </div>
+      </div>
+      <p class="src reveal">Measured in this repo: <code>runs/prep.log</code>, <code>tools/memory_bench.py</code>, <code>bench/referee.py</code>.</p>
     </div>
   </section>
 
@@ -264,21 +272,6 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
 </footer>
 
 <script>
-// Figures shown in "Why it holds". Only measured numbers. Add swarm results here when the runs finish.
-const FIGS = [
-  { us: "0.04", them: "1.00", label: "hit@1 from list order alone",
-    note: "Raw candidate lists vs ours, reshuffled per spectrum. Random is 0.038.", src: "runs/prep.log" },
-  { us: "7 / 12", them: "0 / 12", label: "agents get the current verdict",
-    note: "past.dev shared memory vs an embedding store, on a dated log of claims and overturned verdicts.", src: "tools/memory_bench.py" },
-  { us: "0", them: "30", label: "test scores leaked to proposers",
-    note: "Scoped past.dev audiences vs a shared memory file without read scoping, same log and questions.", src: "tools/memory_bench.py" },
-];
-document.getElementById("figs").innerHTML = FIGS.map(f => `
-  <div class="card fig reveal">
-    <div class="pair"><span class="big ok">${f.us}</span><span class="vs">vs</span><span class="big bad" style="font-size:24px">${f.them}</span></div>
-    <h3>${f.label}</h3><p>${f.note}</p><div class="src">${f.src}</div>
-  </div>`).join("");
-
 // Claims for the animation. `stop` is the gate index where it fails (1..4), or 5 for promoted.
 const CLAIMS = [
   { who: "proposer-2", text: "Natural-product prior on candidates", gain: "claims a gain", stop: 1, verdict: "NOISE",
@@ -351,6 +344,47 @@ addEventListener("resize", () => stage.querySelectorAll(".claim").forEach(el => 
   el.style.transition = "none"; place(el, +el.dataset.col || 0);
   requestAnimationFrame(() => requestAnimationFrame(() => el.style.transition = ""));
 }));
+
+
+// Background: a mass spectrum whose peaks breathe slowly. Pale ink, never over the text's contrast.
+(() => {
+  const cv = document.getElementById("spec"); if (!cv) return;
+  const ctx = cv.getContext("2d");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let W, H, dpr, peaks = [];
+  function seedPeaks() {
+    let r = 7; const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+    peaks = [];
+    const n = Math.round(W / 9);
+    for (let i = 0; i < n; i++) {
+      const x = rnd() * W;
+      const base = Math.pow(rnd(), 3.2);           // most peaks small, a few tall, like a real spectrum
+      peaks.push({ x, base, ph: rnd() * 6.28, sp: .25 + rnd() * .5 });
+    }
+  }
+  function size() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    seedPeaks();
+  }
+  function frame(t) {
+    ctx.clearRect(0, 0, W, H);
+    const floor = H - 28, top = H * .18;
+    const scan = ((t / 9000) % 1.2) * W;            // a slow reading line sweeping left to right
+    ctx.lineWidth = 1.4;
+    for (const p of peaks) {
+      const h = (floor - top) * p.base * (.72 + .28 * Math.sin(t / 1000 * p.sp + p.ph));
+      const near = Math.max(0, 1 - Math.abs(p.x - scan) / 140);
+      ctx.strokeStyle = `rgba(27,27,24,${.07 + .10 * near})`;
+      ctx.beginPath(); ctx.moveTo(p.x, floor); ctx.lineTo(p.x, floor - h); ctx.stroke();
+    }
+    ctx.strokeStyle = "rgba(27,27,24,.10)"; ctx.beginPath(); ctx.moveTo(0, floor + .5); ctx.lineTo(W, floor + .5); ctx.stroke();
+    if (!still) requestAnimationFrame(frame);
+  }
+  size(); addEventListener("resize", size);
+  requestAnimationFrame(frame);
+})();
 
 // reveal on scroll
 const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .12 });
