@@ -473,10 +473,11 @@ Exa ablation: [NUMBER] skips before compute with Exa, [NUMBER] without. Promoted
   use of the same holdout leaks into model choice [[11]](#references)[[12]](#references).
 - **Compute bound.** A full verdict takes up to 16 sandbox runs for the claim and the incumbent (incumbent runs are
   cached). Val and test are fixed 4,000 spectrum subsets, not the full folds.
-- **Mixed hardware.** Early baseline sweeps ran on 16 CPU sandboxes, before GPU functions were enabled on our Modal
-  account. The cloud runs use Modal GPUs. The Referee caches runs by code, split, seed and mode, not by
-  hardware, so a cached incumbent run and a new claim run can come from different machine types. Floating point
-  results can differ slightly between CPU and GPU.
+- **Hardware.** Early baseline sweeps ran on 16 CPU sandboxes. Referee verdicts run on Modal A10G GPUs. The Referee
+  caches runs by code, split, seed and mode, not by hardware, so we checked the cache: all 49 cached runs trained in
+  at most 187 s, where the baseline takes about 59 s on an A10G and about 576 s on CPU. No CPU run was paired with a
+  GPU run. The cache does not record the machine type, so this check is by training time. Since 08:25 PT the cloud
+  runs wait for a GPU instead of falling back to CPU (`SPECTRE_GPU_WAIT=7200`).
 - **Runs were restarted.** The cloud runs (tags `swarm`, `naive`, `single`) were restarted at 08:25 PT after Modal ran
   out of GPU capacity. Before the fix, those infrastructure failures were logged as CRASH. The Referee now retries
   them and labels them INFRA, never CRASH, so they do not count against a proposer.
