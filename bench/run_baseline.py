@@ -19,6 +19,14 @@ def hit_at_k(ranked: dict, labels: dict, ks=(1, 5, 20)):
     return res
 
 
+def mrr20(ranked: dict, labels: dict):
+    tot = 0.0
+    for i, t in labels.items():
+        r = ranked.get(i, [])[:20]
+        tot += 1 / (r.index(t) + 1) if t in r else 0.0
+    return tot / len(labels)
+
+
 def _run(seed: int, module: str = "bench.baseline.model", overrides: str = "{}"):
     import time
     import numpy as np
@@ -41,13 +49,25 @@ def _run(seed: int, module: str = "bench.baseline.model", overrides: str = "{}")
     t_train = time.time() - t1
     ranked = model.rank(state, inputs, cands)
     metrics = hit_at_k(ranked, labels)
+    metrics["mrr@20"] = mrr20(ranked, labels)
+    abl = inputs.copy()  # spectra-zeroed canary, same as the sandbox harness
+    abl["intensities"] = [np.zeros(len(x)).tolist() for x in abl["intensities"]]
+    ranked_abl = model.rank(state, abl, cands)
+    metrics_abl = {**hit_at_k(ranked_abl, labels), "mrr@20": mrr20(ranked_abl, labels)}
     rng = np.random.default_rng(seed)
     rand = {c: list(rng.permutation(list(s))) for c, s in zip(cands["id"], cands["cand_smiles"])}
     rand_m = hit_at_k(rand, labels)
     expected_rand1 = float(np.mean([1 / len(s) if len(s) else 0 for s in cands["cand_smiles"]]))
-    out = {"module": module, "overrides": overrides, "seed": seed, "val": metrics, "random": rand_m, "random_hit1_expected": expected_rand1,
+    out = {"module": module, "overrides": overrides, "seed": seed, "val": metrics, "val_ablate": metrics_abl, "random": rand_m, "random_hit1_expected": expected_rand1,
            "train_s": round(t_train), "total_s": round(time.time() - t0)}
     print(out)
+    # persist so results survive a dropped local client (modal run --detach)
+    import hashlib
+    os.makedirs("/data/dev_runs", exist_ok=True)
+    tag = hashlib.sha256(f"{module}|{overrides}|{seed}".encode()).hexdigest()[:10]
+    with open(f"/data/dev_runs/{module.split('.')[-1]}_{tag}.json", "w") as f:
+        json.dump(out, f)
+    vol.commit()
     return out
 
 
