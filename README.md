@@ -27,7 +27,6 @@ SF AI Research Hackathon, November 14 and 15, 2026. Sponsor challenges entered: 
 | **The task** | [MassSpecGym](https://huggingface.co/datasets/roman-bushuiev/MassSpecGym) retrieval. Given an MS/MS spectrum, rank up to 256 candidate molecules with the same formula. We use the official MCES-disjoint train, val and test folds [[1]](#references). The Referee decides on MRR@20; we also report hit@1, hit@5, hit@20 |
 | **The trap** | In the raw candidate lists the true molecule is first for **4,000 of 4,000** val spectra and 4,000 of 4,000 test spectra. An agent that "discovers" this gets a perfect score |
 | **Try it** | `python3 ui/server.py`, then open http://localhost:8765 to watch the swarm. `SPECTRE_SAMPLE=1` shows sample data |
-| **Pitch** | [PITCH.md](PITCH.md) |
 | **Sponsor briefs** | [tools/SPONSORS.md](tools/SPONSORS.md) |
 
 ---
@@ -242,9 +241,13 @@ Seed 0 on val, 16 CPU sandbox. From `bench/candidates/honest.py` and `runs/hones
 | Random ranking | 0.0395 | 0.1175 | 0.2935 | |
 | Baseline MLP, binned spectrum to fingerprint | 0.1003 | 0.2298 | 0.4195 | 576 s |
 | Sparse first layer | 0.1070 | 0.2295 | 0.4250 | 520 s |
+| Sparse first layer and cosine loss | 0.1078 | 0.2295 | 0.4300 | 389 s |
+| Sparse first layer, neutral losses and cosine loss | 0.1130 | 0.2425 | 0.4278 | 684 s |
 | Sparse first layer and neutral losses | 0.1145 | 0.2378 | 0.4285 | 456 s |
 
 These are single seed numbers. The Referee decides whether any of them is a real gain.
+
+![Val hit@1 for each model, seed 0](docs/honest_sweep_hit1.png)
 
 ### Planted fake gains
 
